@@ -1,0 +1,386 @@
+import { ref, computed } from 'vue'
+import { defineStore } from 'pinia'
+import { supabase } from '@/lib/supabase'
+import { useItemsStore } from './items'
+import { useAuthStore } from './auth'
+import type {
+  DailyInstance,
+  DailyInstanceWithItem,
+  InstancesByStatus,
+  SnoozeInterval,
+  ConflictCheck,
+} from '@/types'
+import type { Database } from '@/types/database'
+
+type InstanceInsert = Database['public']['Tables']['daily_instances']['Insert']
+
+// Conflict spacing in minutes (from spec)
+const CONFLICT_SPACING_MINUTES = 5
+
+export const useInstancesStore = defineStore('instances', () => {
+  // State
+  const instances = ref<DailyInstanceWithItem[]>([])
+  const selectedDate = ref<string>(formatDate(new Date()))
+  const isLoading = ref(false)
+  const error = ref<string | null>(null)
+  const lastFetched = ref<Date | null>(null)
+
+  // Stores
+  const itemsStore = useItemsStore()
+  const authStore = useAuthStore()
+
+  // Getters
+  const instancesByStatus = computed<InstancesByStatus>(() => {
+    const now = new Date()
+    const result: InstancesByStatus = {
+      overdue: [],
+      due: [],
+      upcoming: [],
+      snoozed: [],
+      confirmed: [],
+    }
+
+    for (const instance of instances.value) {
+      if (instance.status === 'confirmed') {
+        result.confirmed.push(instance)
+        continue
+      }
+
+      if (instance.status === 'snoozed') {
+        // Check if snooze has expired
+        if (instance.snooze_until && new Date(instance.snooze_until) <= now) {
+          result.due.push(instance)
+        } else {
+          result.snoozed.push(instance)
+        }
+        continue
+      }
+
+      if (instance.status === 'expired') {
+        result.overdue.push(instance)
+        continue
+      }
+
+      // Pending - check if due or upcoming
+      const scheduledTime = new Date(instance.scheduled_time)
+      const thirtyMinutesAgo = new Date(now.getTime() - 30 * 60 * 1000)
+
+      if (scheduledTime < thirtyMinutesAgo) {
+        result.overdue.push(instance)
+      } else if (scheduledTime <= now) {
+        result.due.push(instance)
+      } else {
+        result.upcoming.push(instance)
+      }
+    }
+
+    // Sort each category by scheduled time
+    const sortByTime = (a: DailyInstanceWithItem, b: DailyInstanceWithItem) =>
+      new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+
+    result.overdue.sort(sortByTime)
+    result.due.sort(sortByTime)
+    result.upcoming.sort(sortByTime)
+    result.snoozed.sort(sortByTime)
+    result.confirmed.sort(sortByTime)
+
+    return result
+  })
+
+  const pendingCount = computed(
+    () =>
+      instancesByStatus.value.overdue.length +
+      instancesByStatus.value.due.length +
+      instancesByStatus.value.snoozed.length,
+  )
+
+  const confirmedCount = computed(() => instancesByStatus.value.confirmed.length)
+
+  // Actions
+  async function fetchInstancesForDate(date: string): Promise<void> {
+    isLoading.value = true
+    error.value = null
+    selectedDate.value = date
+
+    try {
+      // Ensure items are loaded
+      if (itemsStore.items.length === 0) {
+        await itemsStore.fetchItems()
+      }
+
+      // Fetch instances for the date
+      const { data: instancesData, error: fetchError } = await supabase
+        .from('daily_instances')
+        .select('*')
+        .eq('date', date)
+
+      if (fetchError) throw fetchError
+
+      // Cast to proper types
+      const instanceRows = (instancesData ?? []) as unknown as DailyInstance[]
+
+      // Join with items
+      const joined: DailyInstanceWithItem[] = []
+      for (const instance of instanceRows) {
+        const item = itemsStore.getItemById(instance.item_id)
+        if (item) {
+          joined.push({ ...instance, item })
+        }
+      }
+      instances.value = joined
+
+      lastFetched.value = new Date()
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to fetch instances'
+      console.error('Error fetching instances:', e)
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function refreshInstances(): Promise<void> {
+    await fetchInstancesForDate(selectedDate.value)
+  }
+
+  function checkConflict(instance: DailyInstanceWithItem): ConflictCheck {
+    const conflictGroup = instance.item.conflict_group
+    if (!conflictGroup) {
+      return { hasConflict: false, canOverride: true }
+    }
+
+    const now = new Date()
+    const conflictThreshold = CONFLICT_SPACING_MINUTES * 60 * 1000
+
+    // Find recently confirmed items in the same conflict group
+    const recentConfirmed = instances.value.filter((i) => {
+      if (i.id === instance.id) return false
+      if (i.item.conflict_group !== conflictGroup) return false
+      if (i.status !== 'confirmed' || !i.confirmed_at) return false
+
+      const confirmedTime = new Date(i.confirmed_at)
+      const timeSince = now.getTime() - confirmedTime.getTime()
+      return timeSince < conflictThreshold
+    })
+
+    if (recentConfirmed.length === 0) {
+      return { hasConflict: false, canOverride: true }
+    }
+
+    // Find the most recent confirmation
+    const mostRecent = recentConfirmed.reduce((latest, i) => {
+      const iTime = new Date(i.confirmed_at!).getTime()
+      const latestTime = new Date(latest.confirmed_at!).getTime()
+      return iTime > latestTime ? i : latest
+    })
+
+    const confirmedTime = new Date(mostRecent.confirmed_at!)
+    const timeSince = now.getTime() - confirmedTime.getTime()
+    const remainingMs = conflictThreshold - timeSince
+
+    return {
+      hasConflict: true,
+      conflictingItemName: mostRecent.item.name,
+      remainingSeconds: Math.ceil(remainingMs / 1000),
+      canOverride: true, // Always allow override as per spec
+    }
+  }
+
+  async function confirmInstance(
+    instanceId: string,
+    notes?: string,
+    overrideConflict = false,
+  ): Promise<boolean> {
+    const instance = instances.value.find((i) => i.id === instanceId)
+    if (!instance) {
+      error.value = 'Instance not found'
+      return false
+    }
+
+    // Check conflict unless overriding
+    if (!overrideConflict) {
+      const conflict = checkConflict(instance)
+      if (conflict.hasConflict) {
+        error.value = `Wait ${conflict.remainingSeconds}s - ${conflict.conflictingItemName} was just given`
+        return false
+      }
+    }
+
+    try {
+      const now = new Date().toISOString()
+      const userId = authStore.currentUser?.id ?? null
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: updateError } = await (supabase as any)
+        .from('daily_instances')
+        .update({
+          status: 'confirmed',
+          confirmed_at: now,
+          confirmed_by: userId,
+          notes: notes ?? null,
+        })
+        .eq('id', instanceId)
+
+      if (updateError) throw updateError
+
+      // Update local state
+      const index = instances.value.findIndex((i) => i.id === instanceId)
+      if (index !== -1) {
+        const existing = instances.value[index]!
+        instances.value[index] = {
+          id: existing.id,
+          item_id: existing.item_id,
+          schedule_id: existing.schedule_id,
+          date: existing.date,
+          scheduled_time: existing.scheduled_time,
+          status: 'confirmed',
+          confirmed_at: now,
+          confirmed_by: userId,
+          snooze_until: existing.snooze_until,
+          notes: notes ?? null,
+          is_adhoc: existing.is_adhoc,
+          created_at: existing.created_at,
+          updated_at: existing.updated_at,
+          item: existing.item,
+        }
+      }
+
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to confirm'
+      console.error('Error confirming instance:', e)
+      return false
+    }
+  }
+
+  async function snoozeInstance(instanceId: string, minutes: SnoozeInterval): Promise<boolean> {
+    try {
+      const snoozeUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString()
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: updateError } = await (supabase as any)
+        .from('daily_instances')
+        .update({
+          status: 'snoozed',
+          snooze_until: snoozeUntil,
+        })
+        .eq('id', instanceId)
+
+      if (updateError) throw updateError
+
+      // Update local state
+      const index = instances.value.findIndex((i) => i.id === instanceId)
+      if (index !== -1) {
+        const existing = instances.value[index]!
+        instances.value[index] = {
+          id: existing.id,
+          item_id: existing.item_id,
+          schedule_id: existing.schedule_id,
+          date: existing.date,
+          scheduled_time: existing.scheduled_time,
+          status: 'snoozed',
+          confirmed_at: existing.confirmed_at,
+          confirmed_by: existing.confirmed_by,
+          snooze_until: snoozeUntil,
+          notes: existing.notes,
+          is_adhoc: existing.is_adhoc,
+          created_at: existing.created_at,
+          updated_at: existing.updated_at,
+          item: existing.item,
+        }
+      }
+
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to snooze'
+      console.error('Error snoozing instance:', e)
+      return false
+    }
+  }
+
+  async function createAdHocInstance(
+    itemId: string,
+    scheduledTime: Date,
+    notes?: string,
+  ): Promise<DailyInstanceWithItem | null> {
+    try {
+      const item = itemsStore.getItemById(itemId)
+      if (!item) {
+        error.value = 'Item not found'
+        return null
+      }
+
+      const instanceData: InstanceInsert = {
+        item_id: itemId,
+        date: formatDate(scheduledTime),
+        scheduled_time: scheduledTime.toISOString(),
+        status: 'pending',
+        is_adhoc: true,
+        notes: notes ?? null,
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: newInstance, error: createError } = await (supabase as any)
+        .from('daily_instances')
+        .insert(instanceData)
+        .select()
+        .single()
+
+      if (createError) throw createError
+      if (!newInstance) throw new Error('No data returned from insert')
+
+      const fullInstance: DailyInstanceWithItem = {
+        ...newInstance,
+        item,
+      }
+
+      // Add to local state if same date
+      if (formatDate(scheduledTime) === selectedDate.value) {
+        instances.value.push(fullInstance)
+      }
+
+      return fullInstance
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to create instance'
+      console.error('Error creating ad-hoc instance:', e)
+      return null
+    }
+  }
+
+  // Clear store state
+  function $reset() {
+    instances.value = []
+    selectedDate.value = formatDate(new Date())
+    isLoading.value = false
+    error.value = null
+    lastFetched.value = null
+  }
+
+  return {
+    // State
+    instances,
+    selectedDate,
+    isLoading,
+    error,
+    lastFetched,
+
+    // Getters
+    instancesByStatus,
+    pendingCount,
+    confirmedCount,
+
+    // Actions
+    fetchInstancesForDate,
+    refreshInstances,
+    checkConflict,
+    confirmInstance,
+    snoozeInstance,
+    createAdHocInstance,
+    $reset,
+  }
+})
+
+// Helper function
+function formatDate(date: Date): string {
+  const iso = date.toISOString()
+  return iso.substring(0, 10)
+}

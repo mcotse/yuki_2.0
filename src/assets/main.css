@@ -1,0 +1,258 @@
+@import "tailwindcss";
+
+/* Playful Geometric Design System */
+@theme {
+  /* Colors - Light Mode */
+  --color-background: #FFFDF5;
+  --color-foreground: #1E293B;
+  --color-muted: #F1F5F9;
+  --color-muted-foreground: #64748B;
+  --color-accent: #8B5CF6;
+  --color-accent-foreground: #FFFFFF;
+  --color-secondary: #F472B6;
+  --color-tertiary: #FBBF24;
+  --color-quaternary: #34D399;
+  --color-border: #E2E8F0;
+  --color-input: #FFFFFF;
+  --color-card: #FFFFFF;
+  --color-ring: #8B5CF6;
+
+  /* Status Colors */
+  --color-success: #22C55E;
+  --color-warning: #F59E0B;
+  --color-error: #EF4444;
+  --color-info: #3B82F6;
+
+  /* Typography - using @fontsource-variable */
+  --font-heading: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
+  --font-body: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  /* Font Sizes (Major Third Scale - 1.25) */
+  --text-xs: 0.64rem;
+  --text-sm: 0.8rem;
+  --text-base: 1rem;
+  --text-lg: 1.25rem;
+  --text-xl: 1.563rem;
+  --text-2xl: 1.953rem;
+  --text-3xl: 2.441rem;
+  --text-4xl: 3.052rem;
+
+  /* Border Radius */
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-full: 9999px;
+
+  /* Border Width */
+  --border-width: 2px;
+
+  /* Shadows - Hard "Pop" shadows (no blur) */
+  --shadow-sm: 2px 2px 0px 0px #1E293B;
+  --shadow-md: 4px 4px 0px 0px #1E293B;
+  --shadow-lg: 6px 6px 0px 0px #1E293B;
+  --shadow-xl: 8px 8px 0px 0px #1E293B;
+
+  /* Colored shadows for featured elements */
+  --shadow-accent: 4px 4px 0px 0px #8B5CF6;
+  --shadow-secondary: 4px 4px 0px 0px #F472B6;
+  --shadow-tertiary: 4px 4px 0px 0px #FBBF24;
+  --shadow-muted: 8px 8px 0px 0px #E2E8F0;
+
+  /* Animation */
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 300ms;
+  --duration-slow: 500ms;
+
+  /* Spacing */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+  --spacing-3xl: 4rem;
+}
+
+/* Base Styles */
+html {
+  font-family: var(--font-body);
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* Headings use Outfit font */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* Focus styles */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Utility Classes for Design System */
+
+/* Button base */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  font-family: var(--font-body);
+  font-weight: 700;
+  border-radius: var(--radius-full);
+  border: var(--border-width) solid var(--color-foreground);
+  cursor: pointer;
+  transition: all var(--duration-normal) var(--ease-bounce);
+  min-height: 48px; /* Touch target */
+}
+
+/* Primary Button - "The Candy Button" */
+.btn-primary {
+  background-color: var(--color-accent);
+  color: var(--color-accent-foreground);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-primary:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--shadow-lg);
+}
+
+.btn-primary:active {
+  transform: translate(2px, 2px);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Secondary Button */
+.btn-secondary {
+  background-color: transparent;
+  color: var(--color-foreground);
+  box-shadow: none;
+}
+
+.btn-secondary:hover {
+  background-color: var(--color-tertiary);
+}
+
+/* Card - "The Sticker Card" */
+.card {
+  background-color: var(--color-card);
+  border: var(--border-width) solid var(--color-foreground);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-muted);
+  transition: all var(--duration-normal) var(--ease-bounce);
+}
+
+.card:hover {
+  transform: rotate(-1deg) scale(1.02);
+}
+
+.card-featured {
+  box-shadow: var(--shadow-secondary);
+}
+
+/* Input styles */
+.input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-body);
+  background-color: var(--color-input);
+  border: var(--border-width) solid #CBD5E1;
+  border-radius: var(--radius-md);
+  transition: all var(--duration-normal) var(--ease-bounce);
+}
+
+.input:focus {
+  border-color: var(--color-accent);
+  box-shadow: var(--shadow-accent);
+  outline: none;
+}
+
+/* Label styles */
+.label {
+  display: block;
+  font-weight: 700;
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.5rem;
+}
+
+/* Badge styles */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  border-radius: var(--radius-full);
+  border: var(--border-width) solid var(--color-foreground);
+}
+
+.badge-accent {
+  background-color: var(--color-accent);
+  color: white;
+}
+
+.badge-secondary {
+  background-color: var(--color-secondary);
+  color: white;
+}
+
+.badge-tertiary {
+  background-color: var(--color-tertiary);
+  color: var(--color-foreground);
+}
+
+.badge-quaternary {
+  background-color: var(--color-quaternary);
+  color: var(--color-foreground);
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+
+  .btn-primary:hover,
+  .btn-primary:active {
+    transform: none;
+  }
+}
+
+/* Mobile adjustments - reduce shadows on small screens */
+@media (max-width: 640px) {
+  .btn-primary {
+    box-shadow: var(--shadow-sm);
+  }
+
+  .btn-primary:hover {
+    box-shadow: var(--shadow-md);
+  }
+
+  .card {
+    box-shadow: 4px 4px 0px 0px var(--color-border);
+  }
+}

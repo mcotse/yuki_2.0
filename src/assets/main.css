@@ -458,6 +458,28 @@ section {
   border-radius: var(--radius-lg);
 }
 
+/* Show More Button */
+.show-more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-muted-foreground);
+  background: transparent;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.show-more-btn:hover {
+  color: var(--color-foreground);
+  border-color: var(--color-foreground);
+  background: var(--color-muted);
+}
+
 .collapse-enter-active {
   animation: collapseOpen 0.35s var(--ease-bounce);
 }

@@ -273,6 +273,104 @@ test.describe('Dashboard - Collapsible Sections', () => {
   })
 })
 
+test.describe('Dashboard - Upcoming Section', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+    await loginAsAdmin(page)
+    await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible()
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('upcoming section is collapsible', async ({ page }) => {
+    // Check if upcoming section exists
+    const upcomingHeader = page.getByRole('button').filter({ hasText: /coming up/i })
+    const hasUpcoming = await upcomingHeader.count() > 0
+
+    if (hasUpcoming) {
+      // Should show count in header
+      const headerText = await upcomingHeader.textContent()
+      expect(headerText).toMatch(/\(\d+\)/)
+
+      // Click to collapse
+      await upcomingHeader.click()
+      await page.waitForTimeout(400)
+
+      // Chevron should be rotated (indicating collapsed)
+      const chevron = upcomingHeader.locator('svg.lucide-chevron-down')
+      await expect(chevron).toHaveClass(/-rotate-180/)
+
+      // Click to expand
+      await upcomingHeader.click()
+      await page.waitForTimeout(400)
+
+      // Chevron should not be rotated
+      await expect(chevron).not.toHaveClass(/-rotate-180/)
+    }
+  })
+
+  test('upcoming section shows limited items initially with show more button', async ({ page }) => {
+    // Check if upcoming section exists with enough items
+    const upcomingHeader = page.getByRole('button').filter({ hasText: /coming up/i })
+    const hasUpcoming = await upcomingHeader.count() > 0
+
+    if (hasUpcoming) {
+      // Get the count from header
+      const headerText = await upcomingHeader.textContent()
+      const countMatch = headerText?.match(/\((\d+)\)/)
+      const totalCount = countMatch ? parseInt(countMatch[1]) : 0
+
+      // If there are more than 3 items, should see "Show more" button
+      if (totalCount > 3) {
+        const showMoreBtn = page.locator('.show-more-btn')
+        await expect(showMoreBtn).toBeVisible()
+
+        // Button should show how many more items
+        const btnText = await showMoreBtn.textContent()
+        expect(btnText).toContain('more')
+      }
+    }
+  })
+
+  test('show more button expands to show all upcoming items', async ({ page }) => {
+    const upcomingHeader = page.getByRole('button').filter({ hasText: /coming up/i })
+    const hasUpcoming = await upcomingHeader.count() > 0
+
+    if (hasUpcoming) {
+      const headerText = await upcomingHeader.textContent()
+      const countMatch = headerText?.match(/\((\d+)\)/)
+      const totalCount = countMatch ? parseInt(countMatch[1]) : 0
+
+      if (totalCount > 3) {
+        // Count visible cards in upcoming section before clicking show more
+        const upcomingSection = upcomingHeader.locator('xpath=ancestor::section')
+        const initialCards = await upcomingSection.locator('.card').count()
+        expect(initialCards).toBe(3) // Should show only 3 initially
+
+        // Click show more
+        const showMoreBtn = page.locator('.show-more-btn')
+        await showMoreBtn.click()
+        await page.waitForTimeout(400)
+
+        // Should now show all items
+        const expandedCards = await upcomingSection.locator('.card').count()
+        expect(expandedCards).toBe(totalCount)
+
+        // Button should now say "Show less"
+        await expect(showMoreBtn).toContainText('less')
+
+        // Click again to collapse
+        await showMoreBtn.click()
+        await page.waitForTimeout(400)
+
+        // Should be back to 3
+        const collapsedCards = await upcomingSection.locator('.card').count()
+        expect(collapsedCards).toBe(3)
+      }
+    }
+  })
+})
+
 test.describe('Dashboard - Filter and Collapse Interaction', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')

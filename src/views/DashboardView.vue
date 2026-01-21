@@ -24,7 +24,12 @@ const activeFilter = ref<string | null>(null)
 // Collapsible section states
 const filtersCollapsed = ref(true) // Start collapsed for less intrusive UI
 const overdueCollapsed = ref(false)
+const upcomingCollapsed = ref(false)
 const completedCollapsed = ref(false)
+
+// Upcoming section - show limited items with "load more"
+const UPCOMING_INITIAL_COUNT = 3
+const upcomingShowAll = ref(false)
 
 // Filter options with icons and colors
 const filterOptions = [
@@ -53,6 +58,15 @@ const filteredDue = computed(() => filterInstances(instancesByStatus.value.due))
 const filteredSnoozed = computed(() => filterInstances(instancesByStatus.value.snoozed))
 const filteredUpcoming = computed(() => filterInstances(instancesByStatus.value.upcoming))
 const filteredConfirmed = computed(() => filterInstances(instancesByStatus.value.confirmed))
+
+// Visible upcoming items (limited unless "show all" is enabled)
+const visibleUpcoming = computed(() => {
+  if (upcomingShowAll.value) return filteredUpcoming.value
+  return filteredUpcoming.value.slice(0, UPCOMING_INITIAL_COUNT)
+})
+
+const hasMoreUpcoming = computed(() => filteredUpcoming.value.length > UPCOMING_INITIAL_COUNT)
+const hiddenUpcomingCount = computed(() => filteredUpcoming.value.length - UPCOMING_INITIAL_COUNT)
 
 // Toggle filter
 function toggleFilter(filterId: string) {
@@ -234,20 +248,49 @@ onMounted(loadDashboard)
 
       <!-- Upcoming Section -->
       <section v-if="instancesByStatus.upcoming.length > 0" class="mb-8">
-        <h2 class="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">
-          Coming Up
-          <span v-if="activeFilter" class="text-xs text-muted-foreground/70 font-medium ml-1">({{ filteredUpcoming.length }})</span>
-        </h2>
-        <div class="card-list-wrapper">
-          <TransitionGroup name="card-filter" tag="div" class="space-y-3">
-            <MedicationCard
-              v-for="instance in filteredUpcoming"
-              :key="instance.id"
-              :instance="instance"
-              status="upcoming"
-            />
-          </TransitionGroup>
-        </div>
+        <button
+          class="flex items-center gap-2 w-full text-left mb-3 group"
+          @click="upcomingCollapsed = !upcomingCollapsed"
+        >
+          <h2 class="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+            Coming Up
+          </h2>
+          <span class="text-xs text-muted-foreground/70 font-medium">({{ filteredUpcoming.length }})</span>
+          <ChevronDown
+            class="w-4 h-4 text-muted-foreground/70 transition-transform duration-300"
+            :class="{ '-rotate-180': upcomingCollapsed }"
+          />
+        </button>
+        <Transition name="collapse">
+          <div v-show="!upcomingCollapsed" class="collapse-content">
+            <div class="card-list-wrapper">
+              <TransitionGroup name="card-filter" tag="div" class="space-y-3">
+                <MedicationCard
+                  v-for="instance in visibleUpcoming"
+                  :key="instance.id"
+                  :instance="instance"
+                  status="upcoming"
+                />
+              </TransitionGroup>
+              <!-- Show More / Show Less Button -->
+              <div v-if="hasMoreUpcoming" class="mt-4 text-center">
+                <button
+                  class="show-more-btn"
+                  @click="upcomingShowAll = !upcomingShowAll"
+                >
+                  <span v-if="!upcomingShowAll">
+                    Show {{ hiddenUpcomingCount }} more
+                  </span>
+                  <span v-else>Show less</span>
+                  <ChevronDown
+                    class="w-4 h-4 transition-transform duration-200"
+                    :class="{ '-rotate-180': upcomingShowAll }"
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
       </section>
 
       <!-- Completed Section -->

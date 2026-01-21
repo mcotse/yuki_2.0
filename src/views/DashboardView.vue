@@ -6,7 +6,7 @@ import { useInstancesStore } from '@/stores/instances'
 import { generateInstancesForDate } from '@/services/instanceGenerator'
 import { getToday } from '@/utils/date'
 import MedicationCard from '@/components/dashboard/MedicationCard.vue'
-import { RefreshCw, AlertCircle, ChevronDown, Droplet, Pill, Leaf, Utensils, X } from 'lucide-vue-next'
+import { RefreshCw, AlertCircle, ChevronDown, Droplet, Pill, Leaf, Utensils, X, Filter } from 'lucide-vue-next'
 import type { ScheduledInstance } from '@/types'
 
 const itemsStore = useItemsStore()
@@ -22,6 +22,7 @@ const { instancesByStatus, pendingCount, confirmedCount } = storeToRefs(instance
 const activeFilter = ref<string | null>(null)
 
 // Collapsible section states
+const filtersCollapsed = ref(false)
 const overdueCollapsed = ref(false)
 const completedCollapsed = ref(false)
 
@@ -107,25 +108,50 @@ onMounted(loadDashboard)
     </div>
 
     <!-- Filter Tags -->
-    <div class="flex flex-wrap gap-2 mb-6 overflow-x-auto pb-1">
+    <div class="mb-6">
       <button
-        v-for="filter in filterOptions"
-        :key="filter.id"
-        class="filter-tag group"
-        :class="[
-          activeFilter === filter.id
-            ? filter.colorClass + ' border-2 shadow-sm'
-            : 'bg-muted/50 text-muted-foreground border border-border hover:border-foreground/30',
-        ]"
-        @click="toggleFilter(filter.id)"
+        class="flex items-center gap-2 w-full text-left mb-2 group"
+        @click="filtersCollapsed = !filtersCollapsed"
       >
-        <component :is="filter.icon" class="w-3.5 h-3.5" />
-        <span class="text-xs font-semibold whitespace-nowrap">{{ filter.label }}</span>
-        <X
-          v-if="activeFilter === filter.id"
-          class="w-3 h-3 ml-0.5 opacity-60 group-hover:opacity-100"
+        <Filter class="w-4 h-4 text-muted-foreground" />
+        <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+          Filters
+        </span>
+        <span
+          v-if="activeFilter"
+          class="text-xs font-medium text-accent"
+        >
+          (1 active)
+        </span>
+        <ChevronDown
+          class="w-4 h-4 text-muted-foreground/70 transition-transform duration-300 ml-auto"
+          :class="{ '-rotate-180': filtersCollapsed }"
         />
       </button>
+      <Transition name="collapse">
+        <div v-show="!filtersCollapsed" class="collapse-content">
+          <div class="flex flex-wrap gap-2 overflow-x-auto pb-1">
+            <button
+              v-for="filter in filterOptions"
+              :key="filter.id"
+              class="filter-tag group"
+              :class="[
+                activeFilter === filter.id
+                  ? filter.colorClass + ' border-2 shadow-sm'
+                  : 'bg-muted/50 text-muted-foreground border border-border hover:border-foreground/30',
+              ]"
+              @click="toggleFilter(filter.id)"
+            >
+              <component :is="filter.icon" class="w-3.5 h-3.5" />
+              <span class="text-xs font-semibold whitespace-nowrap">{{ filter.label }}</span>
+              <X
+                v-if="activeFilter === filter.id"
+                class="w-3 h-3 ml-0.5 opacity-60 group-hover:opacity-100"
+              />
+            </button>
+          </div>
+        </div>
+      </Transition>
     </div>
 
     <!-- Loading State -->

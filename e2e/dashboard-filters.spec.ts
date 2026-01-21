@@ -18,6 +18,33 @@ test.describe('Dashboard - Filter Tags', () => {
     await page.waitForLoadState('networkidle')
   })
 
+  test('filter section is collapsible', async ({ page }) => {
+    // Filters header should be visible
+    const filtersHeader = page.getByRole('button').filter({ hasText: /filters/i })
+    await expect(filtersHeader).toBeVisible()
+
+    // Filter tags should be visible initially
+    await expect(page.getByRole('button', { name: /left eye/i })).toBeVisible()
+
+    // Click to collapse
+    await filtersHeader.click()
+    await page.waitForTimeout(400)
+
+    // Filter tags should be hidden
+    await expect(page.getByRole('button', { name: /left eye/i })).not.toBeVisible()
+
+    // Chevron should be rotated
+    const chevron = filtersHeader.locator('svg.lucide-chevron-down')
+    await expect(chevron).toHaveClass(/-rotate-180/)
+
+    // Click to expand
+    await filtersHeader.click()
+    await page.waitForTimeout(400)
+
+    // Filter tags should be visible again
+    await expect(page.getByRole('button', { name: /left eye/i })).toBeVisible()
+  })
+
   test('displays filter tags', async ({ page }) => {
     // Should show filter buttons
     await expect(page.getByRole('button', { name: /left eye/i })).toBeVisible()
@@ -95,6 +122,25 @@ test.describe('Dashboard - Filter Tags', () => {
     // Left eye should be deactivated, right eye should be active
     await expect(leftEyeFilter.locator('svg.lucide-x')).not.toBeVisible()
     await expect(rightEyeFilter.locator('svg.lucide-x')).toBeVisible()
+  })
+
+  test('filter header shows active count when filter is selected', async ({ page }) => {
+    const filtersHeader = page.getByRole('button').filter({ hasText: /filters/i })
+
+    // Initially should not show active count
+    await expect(filtersHeader).not.toContainText('active')
+
+    // Activate a filter
+    await page.getByRole('button', { name: /left eye/i }).click()
+
+    // Should now show "(1 active)"
+    await expect(filtersHeader).toContainText('1 active')
+
+    // Deactivate the filter
+    await page.getByRole('button', { name: /left eye/i }).click()
+
+    // Should no longer show active count
+    await expect(filtersHeader).not.toContainText('active')
   })
 })
 

@@ -114,12 +114,18 @@ export const useInstancesStore = defineStore('instances', () => {
 
       const instanceRows = (await response.json()) as DailyInstance[]
 
-      // Join with items
+      // Join with items, creating display-friendly items for quick logs
       const joined: DailyInstanceWithItem[] = []
       for (const instance of instanceRows) {
         const item = itemsStore.getItemById(instance.item_id)
         if (item) {
-          joined.push({ ...instance, item })
+          // Check if this is a quick log entry (has [category] in notes)
+          if (instance.is_adhoc && instance.notes?.startsWith('[')) {
+            const displayItem = createQuickLogDisplayItem(instance.notes, item)
+            joined.push({ ...instance, item: displayItem })
+          } else {
+            joined.push({ ...instance, item })
+          }
         }
       }
       instances.value = joined
@@ -413,6 +419,118 @@ export const useInstancesStore = defineStore('instances', () => {
     }
   }
 
+  /**
+   * Create a quick log entry - creates an ad-hoc instance and immediately confirms it.
+   * Used for logging ad-hoc events like snacks, behaviors, symptoms, etc.
+   * Note: Does not set global error state to avoid disrupting the dashboard UI.
+   */
+  async function createQuickLog(input: {
+    category: string
+    note?: string
+  }): Promise<{ success: boolean; error?: string }> {
+    const now = new Date()
+    const userId = authStore.currentUser?.id ?? null
+
+    try {
+      // First, ensure we have a Quick Log placeholder item
+      const itemId = await ensureQuickLogItem()
+      if (!itemId) {
+        console.error('[Quick Log] Could not get quick log item')
+        return { success: false, error: 'Could not create quick log item' }
+      }
+
+      // Create a confirmed ad-hoc instance
+      const instanceData = {
+        item_id: itemId,
+        date: formatDate(now),
+        scheduled_time: now.toISOString(),
+        status: 'confirmed',
+        confirmed_at: now.toISOString(),
+        confirmed_by: userId,
+        is_adhoc: true,
+        notes: input.note
+          ? `[${input.category}] ${input.note}`
+          : `[${input.category}]`,
+      }
+
+      const response = await fetch(`${API_BASE}/instances`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(instanceData),
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('[Quick Log] API error:', errorText)
+        return { success: false, error: 'Failed to save quick log' }
+      }
+
+      // Refresh instances to show the new entry
+      await refreshInstances()
+
+      return { success: true }
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Failed to create quick log'
+      console.error('[Quick Log] Error:', e)
+      return { success: false, error: errorMessage }
+    }
+  }
+
+  // Cache for quick log item ID
+  let quickLogItemId: string | null = null
+
+  /**
+   * Ensure a Quick Log placeholder item exists in the database.
+   * Returns the item ID.
+   */
+  async function ensureQuickLogItem(): Promise<string | null> {
+    if (quickLogItemId) return quickLogItemId
+
+    try {
+      // Ensure items are loaded
+      if (itemsStore.items.length === 0) {
+        await itemsStore.fetchItems()
+      }
+
+      // Check if Quick Log item already exists by name
+      const existingItem = itemsStore.items.find(
+        (item) => item.name === 'Quick Log'
+      )
+
+      if (existingItem) {
+        quickLogItemId = existingItem.id
+        console.log('[Quick Log] Found existing item:', quickLogItemId)
+        return quickLogItemId
+      }
+
+      console.log('[Quick Log] Creating new item, items count:', itemsStore.items.length)
+
+      // Create a new Quick Log item
+      const newItem = await itemsStore.createItem({
+        name: 'Quick Log',
+        type: 'supplement',
+        category: 'oral',
+        dose: null,
+        location: null,
+        frequency: 'as_needed',
+        notes: 'Placeholder item for quick log entries',
+        active: true,
+      })
+
+      if (newItem) {
+        quickLogItemId = newItem.id
+        console.log('[Quick Log] Created new item:', quickLogItemId)
+        return quickLogItemId
+      }
+
+      console.error('[Quick Log] Failed to create item')
+      return null
+    } catch (e) {
+      console.error('[Quick Log] Error ensuring quick log item:', e)
+      return null
+    }
+  }
+
   // Clear store state
   function $reset() {
     instances.value = []
@@ -443,6 +561,7 @@ export const useInstancesStore = defineStore('instances', () => {
     undoConfirmation,
     snoozeInstance,
     createAdHocInstance,
+    createQuickLog,
     $reset,
   }
 })
@@ -451,4 +570,32 @@ export const useInstancesStore = defineStore('instances', () => {
 function formatDate(date: Date): string {
   const iso = date.toISOString()
   return iso.substring(0, 10)
+}
+
+// Quick log category mapping
+const QUICK_LOG_CATEGORIES: Record<string, { name: string; type: 'food' | 'supplement' | 'medication'; category: string }> = {
+  snack: { name: 'Snack', type: 'food', category: 'food' },
+  behavior: { name: 'Behavior', type: 'supplement', category: 'oral' },
+  symptom: { name: 'Symptom', type: 'medication', category: 'oral' },
+  other: { name: 'Quick Log', type: 'supplement', category: 'oral' },
+}
+
+// Create a display-friendly item for quick log entries
+function createQuickLogDisplayItem(notes: string | null, baseItem: import('@/types').Item): import('@/types').Item {
+  // Parse category from notes format: "[category] optional note"
+  const categoryMatch = notes?.match(/^\[(\w+)\]/)
+  const categoryKey = categoryMatch ? categoryMatch[1].toLowerCase() : 'other'
+  const categoryInfo = QUICK_LOG_CATEGORIES[categoryKey] || QUICK_LOG_CATEGORIES.other
+
+  // Extract the note text after the category tag
+  const noteText = notes?.replace(/^\[\w+\]\s*/, '') || ''
+
+  // Create a display-friendly item with the category name and note
+  return {
+    ...baseItem,
+    name: noteText || categoryInfo.name,
+    type: categoryInfo.type,
+    category: categoryInfo.category,
+    notes: noteText || null,
+  }
 }

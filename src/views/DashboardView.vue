@@ -6,6 +6,7 @@ import { useInstancesStore } from '@/stores/instances'
 import { generateInstancesForDate } from '@/services/instanceGenerator'
 import { getToday } from '@/utils/date'
 import MedicationCard from '@/components/dashboard/MedicationCard.vue'
+import QuickLogCard from '@/components/dashboard/QuickLogCard.vue'
 import { RefreshCw, AlertCircle, ChevronDown, Droplet, Pill, Leaf, Utensils, X, Filter } from 'lucide-vue-next'
 import type { ScheduledInstance } from '@/types'
 
@@ -174,6 +175,11 @@ onMounted(loadDashboard)
 
     <!-- Dashboard Content -->
     <template v-else>
+      <!-- Quick Log Card - At the top for easy access -->
+      <section class="mb-6">
+        <QuickLogCard @logged="refreshDashboard" />
+      </section>
+
       <!-- Overdue Section -->
       <section v-if="instancesByStatus.overdue.length > 0" class="mb-8">
         <button

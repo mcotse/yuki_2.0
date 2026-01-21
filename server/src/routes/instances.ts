@@ -95,22 +95,53 @@ router.post('/', async (req, res, next) => {
   try {
     const {
       item_id, schedule_id, date, scheduled_time,
-      status = 'pending', is_adhoc = false, notes
+      status = 'pending', is_adhoc = false, notes,
+      confirmed_at, confirmed_by
     } = req.body
     const id = uuidv4()
     const now = new Date().toISOString()
 
-    await executeStatement(
-      `INSERT INTO daily_instances (id, item_id, schedule_id, instance_date, scheduled_time, status, is_adhoc, notes, created_at, updated_at)
-       VALUES (:id, :item_id, :schedule_id, :instanceDate, :scheduled_time, :status, :is_adhoc, :notes, TO_TIMESTAMP(:created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), TO_TIMESTAMP(:updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'))`,
-      {
-        id, item_id, schedule_id: schedule_id || null, instanceDate: date, scheduled_time,
-        status, is_adhoc: is_adhoc ? 1 : 0, notes: notes || null,
-        created_at: now, updated_at: now
-      }
-    )
+    // Extract just the time part (HH:MM) from ISO timestamp if needed
+    let timeOnly = scheduled_time
+    if (scheduled_time && scheduled_time.includes('T')) {
+      const timePart = scheduled_time.split('T')[1]
+      timeOnly = timePart ? timePart.substring(0, 5) : scheduled_time
+    }
 
-    res.status(201).json({ id, item_id, date, scheduled_time, status })
+    // Build the SQL dynamically based on whether confirmed_at is provided
+    let sql = `INSERT INTO daily_instances (id, item_id, schedule_id, instance_date, scheduled_time, status, is_adhoc, notes, created_at, updated_at`
+    let values = `:id, :item_id, :schedule_id, :instanceDate, :scheduled_time, :status, :is_adhoc, :notes, TO_TIMESTAMP(:created_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), TO_TIMESTAMP(:updated_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"')`
+
+    const binds: Record<string, unknown> = {
+      id,
+      item_id: item_id || null,
+      schedule_id: schedule_id || null,
+      instanceDate: date,
+      scheduled_time: timeOnly,
+      status,
+      is_adhoc: is_adhoc ? 1 : 0,
+      notes: notes || null,
+      created_at: now,
+      updated_at: now
+    }
+
+    if (confirmed_at) {
+      sql += `, confirmed_at`
+      values += `, CAST(FROM_TZ(TO_TIMESTAMP(:confirmed_at, 'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"'), 'UTC') AT TIME ZONE 'America/Los_Angeles' AS TIMESTAMP)`
+      binds.confirmed_at = confirmed_at
+    }
+
+    if (confirmed_by) {
+      sql += `, confirmed_by`
+      values += `, :confirmed_by`
+      binds.confirmed_by = confirmed_by
+    }
+
+    sql += `) VALUES (${values})`
+
+    await executeStatement(sql, binds)
+
+    res.status(201).json({ id, item_id, date, scheduled_time: timeOnly, status, is_adhoc, notes })
   } catch (error) {
     next(error)
   }

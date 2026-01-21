@@ -44,6 +44,7 @@ router.post('/reset', async (req, res, next) => {
     const tacrolimusId = 'test-item-tacrolimus'
     const prednisoloneOralId = 'test-item-pred-oral'
     const gabapentinId = 'test-item-gabapentin'
+    const quickLogId = 'test-item-quicklog'
 
     // Insert user
     await executeStatement(
@@ -108,6 +109,14 @@ router.post('/reset', async (req, res, next) => {
        VALUES (:id, :pet_id, :type, :category, :name, :dose, :location, :notes, :frequency, :active, :conflict_group, :start_date)`,
       { id: gabapentinId, pet_id: petId, type: 'medication', category: 'oral', name: 'Gabapentin 50mg',
         dose: '1 tablet', location: 'ORAL', notes: null, frequency: '12h', active: 1, conflict_group: null, start_date: '2026-01-01' }
+    )
+
+    // Insert Quick Log placeholder item (for quick log feature)
+    await executeStatement(
+      `INSERT INTO items (id, pet_id, type, category, name, dose, location, notes, frequency, active, conflict_group, start_date)
+       VALUES (:id, :pet_id, :type, :category, :name, :dose, :location, :notes, :frequency, :active, :conflict_group, :start_date)`,
+      { id: quickLogId, pet_id: petId, type: 'supplement', category: 'oral', name: 'Quick Log',
+        dose: null, location: null, notes: 'Placeholder item for quick log entries', frequency: 'as_needed', active: 1, conflict_group: null, start_date: null }
     )
 
     // Create schedules - all at 08:00 for testing (current time-ish)

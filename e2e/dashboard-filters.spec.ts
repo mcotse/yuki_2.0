@@ -19,15 +19,15 @@ test.describe('Dashboard - Filter Tags', () => {
   })
 
   test('filter toggle button expands and collapses filters', async ({ page }) => {
-    // Filter toggle button should be visible (has Filter icon)
-    const filterToggle = page.locator('.filter-toggle')
+    // Filter toggle button should be visible in header
+    const filterToggle = page.getByRole('button', { name: 'Toggle filters' })
     await expect(filterToggle).toBeVisible()
 
     // Click to expand filters
     await filterToggle.click()
     await page.waitForTimeout(300)
 
-    // Filter chips should be visible
+    // Filter chips should be visible in filter bar
     await expect(page.getByRole('button', { name: /left eye/i })).toBeVisible()
 
     // Click to collapse
@@ -40,7 +40,7 @@ test.describe('Dashboard - Filter Tags', () => {
 
   test('displays filter chips when expanded', async ({ page }) => {
     // Expand filters first
-    await page.locator('.filter-toggle').click()
+    await page.getByRole('button', { name: 'Toggle filters' }).click()
     await page.waitForTimeout(300)
 
     // Should show filter buttons
@@ -53,7 +53,7 @@ test.describe('Dashboard - Filter Tags', () => {
 
   test('filter chip toggles active state on click', async ({ page }) => {
     // Expand filters first
-    await page.locator('.filter-toggle').click()
+    await page.getByRole('button', { name: 'Toggle filters' }).click()
     await page.waitForTimeout(300)
 
     const leftEyeFilter = page.getByRole('button', { name: /left eye/i })
@@ -83,7 +83,7 @@ test.describe('Dashboard - Filter Tags', () => {
     expect(initialCount).toBeGreaterThan(0)
 
     // Expand filters and click Left Eye filter
-    await page.locator('.filter-toggle').click()
+    await page.getByRole('button', { name: 'Toggle filters' }).click()
     await page.waitForTimeout(300)
     await page.getByRole('button', { name: /left eye/i }).click()
 
@@ -101,7 +101,7 @@ test.describe('Dashboard - Filter Tags', () => {
     const initialCount = await page.locator('.card').count()
 
     // Expand filters
-    await page.locator('.filter-toggle').click()
+    await page.getByRole('button', { name: 'Toggle filters' }).click()
     await page.waitForTimeout(300)
 
     // Activate and then deactivate filter
@@ -117,7 +117,7 @@ test.describe('Dashboard - Filter Tags', () => {
 
   test('only one filter can be active at a time', async ({ page }) => {
     // Expand filters first
-    await page.locator('.filter-toggle').click()
+    await page.getByRole('button', { name: 'Toggle filters' }).click()
     await page.waitForTimeout(300)
 
     const leftEyeFilter = page.getByRole('button', { name: /left eye/i })
@@ -135,33 +135,36 @@ test.describe('Dashboard - Filter Tags', () => {
     await expect(rightEyeFilter.locator('svg.lucide-x')).toBeVisible()
   })
 
-  test('shows active filter label when collapsed', async ({ page }) => {
-    // Expand filters first
-    await page.locator('.filter-toggle').click()
-    await page.waitForTimeout(300)
+  test('shows active filter indicator dot when filter is active', async ({ page }) => {
+    const filterToggle = page.getByRole('button', { name: 'Toggle filters' })
 
-    // Activate a filter
+    // Initially no indicator dot
+    await expect(filterToggle.locator('.bg-accent')).not.toBeVisible()
+
+    // Expand filters and activate one
+    await filterToggle.click()
+    await page.waitForTimeout(300)
     await page.getByRole('button', { name: /left eye/i }).click()
     await page.waitForTimeout(200)
 
     // Collapse filters
-    await page.locator('.filter-toggle').click()
+    await filterToggle.click()
     await page.waitForTimeout(300)
 
-    // Should show "Filtering: Left Eye" text
-    await expect(page.getByText(/filtering.*left eye/i)).toBeVisible()
+    // Should show indicator dot on the filter toggle
+    await expect(filterToggle.locator('.bg-accent')).toBeVisible()
 
     // Expand and deactivate
-    await page.locator('.filter-toggle').click()
+    await filterToggle.click()
     await page.waitForTimeout(300)
     await page.getByRole('button', { name: /left eye/i }).click()
 
     // Collapse again
-    await page.locator('.filter-toggle').click()
+    await filterToggle.click()
     await page.waitForTimeout(300)
 
-    // Should no longer show filtering text
-    await expect(page.getByText(/filtering.*left eye/i)).not.toBeVisible()
+    // Indicator dot should be gone
+    await expect(filterToggle.locator('.bg-accent')).not.toBeVisible()
   })
 })
 
@@ -300,7 +303,7 @@ test.describe('Dashboard - Filter and Collapse Interaction', () => {
       const initialCount = initialMatch ? parseInt(initialMatch[1]) : 0
 
       // Expand filters and apply a filter that might reduce the count
-      await page.locator('.filter-toggle').click()
+      await page.getByRole('button', { name: 'Toggle filters' }).click()
       await page.waitForTimeout(300)
       await page.getByRole('button', { name: /oral/i }).click()
       await page.waitForTimeout(400)

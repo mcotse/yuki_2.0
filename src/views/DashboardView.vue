@@ -89,61 +89,60 @@ onMounted(loadDashboard)
 </script>
 
 <template>
-  <main class="p-6 pb-24 max-w-lg mx-auto">
+  <main class="dashboard-main">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-4">
+    <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-2xl font-bold text-foreground">Today</h1>
         <p class="text-sm text-muted-foreground">
           {{ pendingCount }} pending, {{ confirmedCount }} done
         </p>
       </div>
-      <button
-        class="p-2 rounded-xl hover:bg-muted/50 transition-colors"
-        :disabled="isLoading"
-        @click="refreshDashboard"
-      >
-        <RefreshCw class="w-5 h-5 text-foreground" :class="{ 'animate-spin': isLoading }" />
-      </button>
+      <div class="flex items-center gap-1">
+        <!-- Filter Toggle -->
+        <button
+          class="header-icon-btn relative"
+          :class="{ 'header-icon-btn-active': activeFilter }"
+          @click="filtersCollapsed = !filtersCollapsed"
+          aria-label="Toggle filters"
+        >
+          <Filter class="w-5 h-5" />
+          <span v-if="activeFilter" class="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-accent border-2 border-background" />
+        </button>
+        <!-- Refresh -->
+        <button
+          class="header-icon-btn"
+          :disabled="isLoading"
+          @click="refreshDashboard"
+        >
+          <RefreshCw class="w-5 h-5" :class="{ 'animate-spin': isLoading }" />
+        </button>
+      </div>
     </div>
 
-    <!-- Filter Tags - Compact inline design -->
-    <div class="flex items-center gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
-      <button
-        class="filter-toggle shrink-0"
-        :class="{ 'filter-toggle-active': !filtersCollapsed || activeFilter }"
-        @click="filtersCollapsed = !filtersCollapsed"
-        aria-label="Toggle filters"
-      >
-        <Filter class="w-3.5 h-3.5" />
-        <span v-if="activeFilter && filtersCollapsed" class="w-1.5 h-1.5 rounded-full bg-accent absolute -top-0.5 -right-0.5" />
-      </button>
-      <Transition name="filter-expand">
-        <div v-show="!filtersCollapsed" class="flex items-center gap-1.5">
-          <button
-            v-for="filter in filterOptions"
-            :key="filter.id"
-            class="filter-chip group"
-            :class="[
-              activeFilter === filter.id
-                ? filter.colorClass + ' border shadow-sm'
-                : 'bg-transparent text-muted-foreground border border-transparent hover:bg-muted/30',
-            ]"
-            @click="toggleFilter(filter.id)"
-          >
-            <component :is="filter.icon" class="w-3 h-3" />
-            <span class="text-xs font-medium whitespace-nowrap">{{ filter.label }}</span>
-            <X
-              v-if="activeFilter === filter.id"
-              class="w-2.5 h-2.5 opacity-60 group-hover:opacity-100"
-            />
-          </button>
-        </div>
-      </Transition>
-      <span v-if="activeFilter && filtersCollapsed" class="text-xs text-muted-foreground">
-        Filtering: <span class="text-foreground font-medium">{{ filterOptions.find(f => f.id === activeFilter)?.label }}</span>
-      </span>
-    </div>
+    <!-- Filter Chips - Expandable row -->
+    <Transition name="filter-expand">
+      <div v-show="!filtersCollapsed" class="filter-bar">
+        <button
+          v-for="filter in filterOptions"
+          :key="filter.id"
+          class="filter-chip group"
+          :class="[
+            activeFilter === filter.id
+              ? filter.colorClass + ' border shadow-sm'
+              : 'bg-muted/40 text-muted-foreground border border-transparent hover:bg-muted/60',
+          ]"
+          @click="toggleFilter(filter.id)"
+        >
+          <component :is="filter.icon" class="w-3 h-3" />
+          <span class="text-xs font-medium whitespace-nowrap">{{ filter.label }}</span>
+          <X
+            v-if="activeFilter === filter.id"
+            class="w-2.5 h-2.5 opacity-60 group-hover:opacity-100"
+          />
+        </button>
+      </div>
+    </Transition>
 
     <!-- Loading State -->
     <div v-if="isLoading && instancesByStatus.due.length === 0" class="py-12 text-center">

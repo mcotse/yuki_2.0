@@ -149,8 +149,13 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .card:hover {
-  transform: translateY(-2px);
+  transform: translateY(-3px);
   box-shadow: var(--shadow-lg);
+}
+
+/* Ensure sections don't clip card shadows */
+section {
+  overflow: visible;
 }
 
 .card-featured {
@@ -393,11 +398,58 @@ h1, h2, h3, h4, h5, h6 {
   overflow: hidden;
 }
 
+/* Dashboard main container - prevents shadow clipping */
+.dashboard-main {
+  padding: 1.5rem;
+  padding-bottom: 6rem;
+  max-width: 32rem;
+  margin: 0 auto;
+  overflow: visible;
+}
+
 /* Card list wrapper - adds padding for shadows and hover effects */
 .card-list-wrapper {
-  margin: -8px;
-  padding: 8px;
+  margin: -12px;
+  padding: 12px;
   overflow: visible;
+}
+
+/* Header icon buttons */
+.header-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  color: var(--color-foreground);
+  background: transparent;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.header-icon-btn:hover {
+  background: var(--color-muted);
+}
+
+.header-icon-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.header-icon-btn-active {
+  color: var(--color-accent);
+}
+
+/* Filter bar */
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  padding: 0.75rem;
+  background: var(--color-muted);
+  border-radius: var(--radius-lg);
 }
 
 .collapse-enter-active {

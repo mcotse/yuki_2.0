@@ -22,7 +22,7 @@ const { instancesByStatus, pendingCount, confirmedCount } = storeToRefs(instance
 const activeFilter = ref<string | null>(null)
 
 // Collapsible section states
-const filtersCollapsed = ref(false)
+const filtersCollapsed = ref(true) // Start collapsed for less intrusive UI
 const overdueCollapsed = ref(false)
 const completedCollapsed = ref(false)
 
@@ -107,51 +107,42 @@ onMounted(loadDashboard)
       </button>
     </div>
 
-    <!-- Filter Tags -->
-    <div class="mb-6">
+    <!-- Filter Tags - Compact inline design -->
+    <div class="flex items-center gap-2 mb-5 overflow-x-auto pb-1 -mx-1 px-1">
       <button
-        class="flex items-center gap-2 w-full text-left mb-2 group"
+        class="filter-toggle shrink-0"
+        :class="{ 'filter-toggle-active': !filtersCollapsed || activeFilter }"
         @click="filtersCollapsed = !filtersCollapsed"
+        aria-label="Toggle filters"
       >
-        <Filter class="w-4 h-4 text-muted-foreground" />
-        <span class="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-          Filters
-        </span>
-        <span
-          v-if="activeFilter"
-          class="text-xs font-medium text-accent"
-        >
-          (1 active)
-        </span>
-        <ChevronDown
-          class="w-4 h-4 text-muted-foreground/70 transition-transform duration-300 ml-auto"
-          :class="{ '-rotate-180': filtersCollapsed }"
-        />
+        <Filter class="w-3.5 h-3.5" />
+        <span v-if="activeFilter && filtersCollapsed" class="w-1.5 h-1.5 rounded-full bg-accent absolute -top-0.5 -right-0.5" />
       </button>
-      <Transition name="collapse">
-        <div v-show="!filtersCollapsed" class="collapse-content">
-          <div class="flex flex-wrap gap-2 overflow-x-auto pb-1">
-            <button
-              v-for="filter in filterOptions"
-              :key="filter.id"
-              class="filter-tag group"
-              :class="[
-                activeFilter === filter.id
-                  ? filter.colorClass + ' border-2 shadow-sm'
-                  : 'bg-muted/50 text-muted-foreground border border-border hover:border-foreground/30',
-              ]"
-              @click="toggleFilter(filter.id)"
-            >
-              <component :is="filter.icon" class="w-3.5 h-3.5" />
-              <span class="text-xs font-semibold whitespace-nowrap">{{ filter.label }}</span>
-              <X
-                v-if="activeFilter === filter.id"
-                class="w-3 h-3 ml-0.5 opacity-60 group-hover:opacity-100"
-              />
-            </button>
-          </div>
+      <Transition name="filter-expand">
+        <div v-show="!filtersCollapsed" class="flex items-center gap-1.5">
+          <button
+            v-for="filter in filterOptions"
+            :key="filter.id"
+            class="filter-chip group"
+            :class="[
+              activeFilter === filter.id
+                ? filter.colorClass + ' border shadow-sm'
+                : 'bg-transparent text-muted-foreground border border-transparent hover:bg-muted/30',
+            ]"
+            @click="toggleFilter(filter.id)"
+          >
+            <component :is="filter.icon" class="w-3 h-3" />
+            <span class="text-xs font-medium whitespace-nowrap">{{ filter.label }}</span>
+            <X
+              v-if="activeFilter === filter.id"
+              class="w-2.5 h-2.5 opacity-60 group-hover:opacity-100"
+            />
+          </button>
         </div>
       </Transition>
+      <span v-if="activeFilter && filtersCollapsed" class="text-xs text-muted-foreground">
+        Filtering: <span class="text-foreground font-medium">{{ filterOptions.find(f => f.id === activeFilter)?.label }}</span>
+      </span>
     </div>
 
     <!-- Loading State -->
@@ -187,16 +178,18 @@ onMounted(loadDashboard)
         </button>
         <Transition name="collapse">
           <div v-show="!overdueCollapsed" class="collapse-content">
-            <TransitionGroup name="card-filter" tag="div" class="space-y-3">
-              <MedicationCard
-                v-for="instance in filteredOverdue"
-                :key="instance.id"
-                :instance="instance"
-                status="overdue"
-                @confirm="confirmMedication(instance.id, $event)"
-                @snooze="instancesStore.snoozeInstance(instance.id, $event)"
-              />
-            </TransitionGroup>
+            <div class="card-list-wrapper">
+              <TransitionGroup name="card-filter" tag="div" class="space-y-3">
+                <MedicationCard
+                  v-for="instance in filteredOverdue"
+                  :key="instance.id"
+                  :instance="instance"
+                  status="overdue"
+                  @confirm="confirmMedication(instance.id, $event)"
+                  @snooze="instancesStore.snoozeInstance(instance.id, $event)"
+                />
+              </TransitionGroup>
+            </div>
           </div>
         </Transition>
       </section>
@@ -207,16 +200,18 @@ onMounted(loadDashboard)
           Due Now
           <span v-if="activeFilter" class="text-xs text-accent/70 font-medium ml-1">({{ filteredDue.length }})</span>
         </h2>
-        <TransitionGroup name="card-filter" tag="div" class="space-y-3">
-          <MedicationCard
-            v-for="instance in filteredDue"
-            :key="instance.id"
-            :instance="instance"
-            status="due"
-            @confirm="confirmMedication(instance.id, $event)"
-            @snooze="instancesStore.snoozeInstance(instance.id, $event)"
-          />
-        </TransitionGroup>
+        <div class="card-list-wrapper">
+          <TransitionGroup name="card-filter" tag="div" class="space-y-3">
+            <MedicationCard
+              v-for="instance in filteredDue"
+              :key="instance.id"
+              :instance="instance"
+              status="due"
+              @confirm="confirmMedication(instance.id, $event)"
+              @snooze="instancesStore.snoozeInstance(instance.id, $event)"
+            />
+          </TransitionGroup>
+        </div>
       </section>
 
       <!-- Snoozed Section -->
@@ -225,15 +220,17 @@ onMounted(loadDashboard)
           Snoozed
           <span v-if="activeFilter" class="text-xs text-tertiary/70 font-medium ml-1">({{ filteredSnoozed.length }})</span>
         </h2>
-        <TransitionGroup name="card-filter" tag="div" class="space-y-3">
-          <MedicationCard
-            v-for="instance in filteredSnoozed"
-            :key="instance.id"
-            :instance="instance"
-            status="snoozed"
-            @confirm="confirmMedication(instance.id, $event)"
-          />
-        </TransitionGroup>
+        <div class="card-list-wrapper">
+          <TransitionGroup name="card-filter" tag="div" class="space-y-3">
+            <MedicationCard
+              v-for="instance in filteredSnoozed"
+              :key="instance.id"
+              :instance="instance"
+              status="snoozed"
+              @confirm="confirmMedication(instance.id, $event)"
+            />
+          </TransitionGroup>
+        </div>
       </section>
 
       <!-- Upcoming Section -->
@@ -242,14 +239,16 @@ onMounted(loadDashboard)
           Coming Up
           <span v-if="activeFilter" class="text-xs text-muted-foreground/70 font-medium ml-1">({{ filteredUpcoming.length }})</span>
         </h2>
-        <TransitionGroup name="card-filter" tag="div" class="space-y-3">
-          <MedicationCard
-            v-for="instance in filteredUpcoming"
-            :key="instance.id"
-            :instance="instance"
-            status="upcoming"
-          />
-        </TransitionGroup>
+        <div class="card-list-wrapper">
+          <TransitionGroup name="card-filter" tag="div" class="space-y-3">
+            <MedicationCard
+              v-for="instance in filteredUpcoming"
+              :key="instance.id"
+              :instance="instance"
+              status="upcoming"
+            />
+          </TransitionGroup>
+        </div>
       </section>
 
       <!-- Completed Section -->
@@ -269,15 +268,17 @@ onMounted(loadDashboard)
         </button>
         <Transition name="collapse">
           <div v-show="!completedCollapsed" class="collapse-content">
-            <TransitionGroup name="card-filter" tag="div" class="space-y-3">
-              <MedicationCard
-                v-for="instance in filteredConfirmed"
-                :key="instance.id"
-                :instance="instance"
-                status="confirmed"
-                @undo="undoMedication(instance.id)"
-              />
-            </TransitionGroup>
+            <div class="card-list-wrapper">
+              <TransitionGroup name="card-filter" tag="div" class="space-y-3">
+                <MedicationCard
+                  v-for="instance in filteredConfirmed"
+                  :key="instance.id"
+                  :instance="instance"
+                  status="confirmed"
+                  @undo="undoMedication(instance.id)"
+                />
+              </TransitionGroup>
+            </div>
           </div>
         </Transition>
       </section>

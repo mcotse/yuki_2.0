@@ -18,34 +18,31 @@ test.describe('Dashboard - Filter Tags', () => {
     await page.waitForLoadState('networkidle')
   })
 
-  test('filter section is collapsible', async ({ page }) => {
-    // Filters header should be visible
-    const filtersHeader = page.getByRole('button').filter({ hasText: /filters/i })
-    await expect(filtersHeader).toBeVisible()
+  test('filter toggle button expands and collapses filters', async ({ page }) => {
+    // Filter toggle button should be visible (has Filter icon)
+    const filterToggle = page.locator('.filter-toggle')
+    await expect(filterToggle).toBeVisible()
 
-    // Filter tags should be visible initially
+    // Click to expand filters
+    await filterToggle.click()
+    await page.waitForTimeout(300)
+
+    // Filter chips should be visible
     await expect(page.getByRole('button', { name: /left eye/i })).toBeVisible()
 
     // Click to collapse
-    await filtersHeader.click()
-    await page.waitForTimeout(400)
+    await filterToggle.click()
+    await page.waitForTimeout(300)
 
-    // Filter tags should be hidden
+    // Filter chips should be hidden
     await expect(page.getByRole('button', { name: /left eye/i })).not.toBeVisible()
-
-    // Chevron should be rotated
-    const chevron = filtersHeader.locator('svg.lucide-chevron-down')
-    await expect(chevron).toHaveClass(/-rotate-180/)
-
-    // Click to expand
-    await filtersHeader.click()
-    await page.waitForTimeout(400)
-
-    // Filter tags should be visible again
-    await expect(page.getByRole('button', { name: /left eye/i })).toBeVisible()
   })
 
-  test('displays filter tags', async ({ page }) => {
+  test('displays filter chips when expanded', async ({ page }) => {
+    // Expand filters first
+    await page.locator('.filter-toggle').click()
+    await page.waitForTimeout(300)
+
     // Should show filter buttons
     await expect(page.getByRole('button', { name: /left eye/i })).toBeVisible()
     await expect(page.getByRole('button', { name: /right eye/i })).toBeVisible()
@@ -54,7 +51,11 @@ test.describe('Dashboard - Filter Tags', () => {
     await expect(page.getByRole('button', { name: /food/i })).toBeVisible()
   })
 
-  test('filter tag toggles active state on click', async ({ page }) => {
+  test('filter chip toggles active state on click', async ({ page }) => {
+    // Expand filters first
+    await page.locator('.filter-toggle').click()
+    await page.waitForTimeout(300)
+
     const leftEyeFilter = page.getByRole('button', { name: /left eye/i })
 
     // Initially should not have active styling (no X icon)
@@ -81,7 +82,9 @@ test.describe('Dashboard - Filter Tags', () => {
     const initialCount = await page.locator('.card').count()
     expect(initialCount).toBeGreaterThan(0)
 
-    // Click Left Eye filter
+    // Expand filters and click Left Eye filter
+    await page.locator('.filter-toggle').click()
+    await page.waitForTimeout(300)
     await page.getByRole('button', { name: /left eye/i }).click()
 
     // Wait for filter animation
@@ -97,6 +100,10 @@ test.describe('Dashboard - Filter Tags', () => {
 
     const initialCount = await page.locator('.card').count()
 
+    // Expand filters
+    await page.locator('.filter-toggle').click()
+    await page.waitForTimeout(300)
+
     // Activate and then deactivate filter
     await page.getByRole('button', { name: /left eye/i }).click()
     await page.waitForTimeout(300)
@@ -109,6 +116,10 @@ test.describe('Dashboard - Filter Tags', () => {
   })
 
   test('only one filter can be active at a time', async ({ page }) => {
+    // Expand filters first
+    await page.locator('.filter-toggle').click()
+    await page.waitForTimeout(300)
+
     const leftEyeFilter = page.getByRole('button', { name: /left eye/i })
     const rightEyeFilter = page.getByRole('button', { name: /right eye/i })
 
@@ -124,23 +135,33 @@ test.describe('Dashboard - Filter Tags', () => {
     await expect(rightEyeFilter.locator('svg.lucide-x')).toBeVisible()
   })
 
-  test('filter header shows active count when filter is selected', async ({ page }) => {
-    const filtersHeader = page.getByRole('button').filter({ hasText: /filters/i })
-
-    // Initially should not show active count
-    await expect(filtersHeader).not.toContainText('active')
+  test('shows active filter label when collapsed', async ({ page }) => {
+    // Expand filters first
+    await page.locator('.filter-toggle').click()
+    await page.waitForTimeout(300)
 
     // Activate a filter
     await page.getByRole('button', { name: /left eye/i }).click()
+    await page.waitForTimeout(200)
 
-    // Should now show "(1 active)"
-    await expect(filtersHeader).toContainText('1 active')
+    // Collapse filters
+    await page.locator('.filter-toggle').click()
+    await page.waitForTimeout(300)
 
-    // Deactivate the filter
+    // Should show "Filtering: Left Eye" text
+    await expect(page.getByText(/filtering.*left eye/i)).toBeVisible()
+
+    // Expand and deactivate
+    await page.locator('.filter-toggle').click()
+    await page.waitForTimeout(300)
     await page.getByRole('button', { name: /left eye/i }).click()
 
-    // Should no longer show active count
-    await expect(filtersHeader).not.toContainText('active')
+    // Collapse again
+    await page.locator('.filter-toggle').click()
+    await page.waitForTimeout(300)
+
+    // Should no longer show filtering text
+    await expect(page.getByText(/filtering.*left eye/i)).not.toBeVisible()
   })
 })
 
@@ -278,7 +299,9 @@ test.describe('Dashboard - Filter and Collapse Interaction', () => {
       const initialMatch = initialText?.match(/\((\d+)\)/)
       const initialCount = initialMatch ? parseInt(initialMatch[1]) : 0
 
-      // Apply a filter that might reduce the count
+      // Expand filters and apply a filter that might reduce the count
+      await page.locator('.filter-toggle').click()
+      await page.waitForTimeout(300)
       await page.getByRole('button', { name: /oral/i }).click()
       await page.waitForTimeout(400)
 

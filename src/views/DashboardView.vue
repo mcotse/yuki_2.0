@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useItemsStore } from '@/stores/items'
 import { useInstancesStore } from '@/stores/instances'
 import { generateInstancesForDate } from '@/services/instanceGenerator'
@@ -13,7 +14,8 @@ const instancesStore = useInstancesStore()
 const isLoading = computed(() => itemsStore.isLoading || instancesStore.isLoading)
 const error = computed(() => itemsStore.error || instancesStore.error)
 
-const { instancesByStatus, pendingCount, confirmedCount } = instancesStore
+// Use storeToRefs to maintain reactivity for computed properties
+const { instancesByStatus, pendingCount, confirmedCount } = storeToRefs(instancesStore)
 
 async function loadDashboard() {
   // Load items first
@@ -31,6 +33,10 @@ async function loadDashboard() {
 
 async function refreshDashboard() {
   await instancesStore.refreshInstances()
+}
+
+function confirmMedication(instanceId: string, overrideConflict: boolean) {
+  instancesStore.confirmInstance(instanceId, undefined, overrideConflict)
 }
 
 onMounted(loadDashboard)
@@ -82,7 +88,7 @@ onMounted(loadDashboard)
             :key="instance.id"
             :instance="instance"
             status="overdue"
-            @confirm="instancesStore.confirmInstance(instance.id)"
+            @confirm="confirmMedication(instance.id, $event)"
             @snooze="instancesStore.snoozeInstance(instance.id, $event)"
           />
         </div>
@@ -99,7 +105,7 @@ onMounted(loadDashboard)
             :key="instance.id"
             :instance="instance"
             status="due"
-            @confirm="instancesStore.confirmInstance(instance.id)"
+            @confirm="confirmMedication(instance.id, $event)"
             @snooze="instancesStore.snoozeInstance(instance.id, $event)"
           />
         </div>
@@ -116,7 +122,7 @@ onMounted(loadDashboard)
             :key="instance.id"
             :instance="instance"
             status="snoozed"
-            @confirm="instancesStore.confirmInstance(instance.id)"
+            @confirm="confirmMedication(instance.id, $event)"
           />
         </div>
       </section>

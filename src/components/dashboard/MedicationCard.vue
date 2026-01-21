@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import type { DailyInstanceWithItem, SnoozeInterval } from '@/types'
 import { formatTime, getRelativeTime } from '@/utils/date'
 import { useInstancesStore } from '@/stores/instances'
@@ -20,7 +20,7 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  confirm: []
+  confirm: [overrideConflict: boolean]
   snooze: [minutes: SnoozeInterval]
 }>()
 
@@ -28,6 +28,22 @@ const instancesStore = useInstancesStore()
 const isExpanded = ref(false)
 const isConfirming = ref(false)
 const showSnoozeOptions = ref(false)
+
+// Reactive time ticker to refresh conflict checks every minute
+const tick = ref(0)
+let tickInterval: ReturnType<typeof setInterval> | null = null
+
+onMounted(() => {
+  tickInterval = setInterval(() => {
+    tick.value++
+  }, 60000) // Update every minute
+})
+
+onUnmounted(() => {
+  if (tickInterval) {
+    clearInterval(tickInterval)
+  }
+})
 
 const scheduledTime = computed(() => formatTime(new Date(props.instance.scheduled_time)))
 const relativeTime = computed(() => getRelativeTime(new Date(props.instance.scheduled_time)))
@@ -72,22 +88,30 @@ const iconColorClass = computed(() => {
   }
 })
 
-const conflict = computed(() => instancesStore.checkConflict(props.instance))
+// Re-check conflict every minute (tick dependency triggers recalculation)
+const conflict = computed(() => {
+  void tick.value // Dependency to trigger recalculation every minute
+  return instancesStore.checkConflict(props.instance)
+})
 
 async function handleConfirm() {
   if (isConfirming.value) return
+
+  // Track whether we're overriding a conflict
+  let overrideConflict = false
 
   // Check for conflict
   if (conflict.value.hasConflict) {
     // Show warning but still allow override
     const confirmed = window.confirm(
-      `${conflict.value.conflictingItemName} was just given. Wait ${conflict.value.remainingSeconds}s or confirm anyway?`,
+      `${conflict.value.conflictingItemName} was just given. Wait ${conflict.value.remainingMinutes} min or confirm anyway?`,
     )
     if (!confirmed) return
+    overrideConflict = true
   }
 
   isConfirming.value = true
-  emit('confirm')
+  emit('confirm', overrideConflict)
   // Reset after animation
   setTimeout(() => {
     isConfirming.value = false
@@ -167,7 +191,7 @@ function handleSnooze(minutes: SnoozeInterval) {
           <Clock class="w-5 h-5 text-muted-foreground" />
         </button>
 
-        <!-- Expand Button -->
+        <!-- Expand Button or Placeholder for alignment -->
         <button
           v-if="instance.item.notes"
           class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
@@ -178,6 +202,7 @@ function handleSnooze(minutes: SnoozeInterval) {
             class="w-5 h-5 text-muted-foreground"
           />
         </button>
+        <div v-else class="w-9 h-9" aria-hidden="true"></div>
       </div>
     </div>
 
@@ -188,7 +213,7 @@ function handleSnooze(minutes: SnoozeInterval) {
     >
       <AlertTriangle class="w-4 h-4" />
       <span>
-        Wait {{ conflict.remainingSeconds }}s - {{ conflict.conflictingItemName }} was just given
+        Wait {{ conflict.remainingMinutes }} min - {{ conflict.conflictingItemName }} was just given
       </span>
     </div>
 

@@ -1,11 +1,12 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { supabase } from '@/lib/supabase'
 import type { Item, ItemSchedule, ItemWithSchedules, ItemCategory, ItemType } from '@/types'
 import type { Database } from '@/types/database'
 
 type ItemInsert = Database['public']['Tables']['items']['Insert']
 type ItemUpdate = Database['public']['Tables']['items']['Update']
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 export const useItemsStore = defineStore('items', () => {
   // State
@@ -62,39 +63,12 @@ export const useItemsStore = defineStore('items', () => {
     error.value = null
 
     try {
-      // Fetch all items
-      const { data: itemsData, error: itemsError } = await supabase
-        .from('items')
-        .select('*')
-        .order('name')
+      // Fetch all items with schedules from REST API
+      const response = await fetch(`${API_BASE}/items`)
+      if (!response.ok) throw new Error('Failed to fetch items')
 
-      if (itemsError) throw itemsError
-
-      // Fetch all schedules
-      const { data: schedulesData, error: schedulesError } = await supabase
-        .from('item_schedules')
-        .select('*')
-
-      if (schedulesError) throw schedulesError
-
-      // Cast to proper types (workaround for Supabase type inference issues)
-      const itemRows = (itemsData ?? []) as unknown as Item[]
-      const scheduleRows = (schedulesData ?? []) as unknown as ItemSchedule[]
-
-      // Group schedules by item_id
-      const schedulesByItem = new Map<string, ItemSchedule[]>()
-      for (const schedule of scheduleRows) {
-        const existing = schedulesByItem.get(schedule.item_id) ?? []
-        existing.push(schedule)
-        schedulesByItem.set(schedule.item_id, existing)
-      }
-
-      // Combine items with their schedules
-      items.value = itemRows.map((item) => ({
-        ...item,
-        schedules: schedulesByItem.get(item.id) ?? [],
-      }))
-
+      const itemsData = (await response.json()) as ItemWithSchedules[]
+      items.value = itemsData
       lastFetched.value = new Date()
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch items'
@@ -117,43 +91,20 @@ export const useItemsStore = defineStore('items', () => {
     schedules?: Array<{ time_slot: string; scheduled_time: string }>,
   ): Promise<ItemWithSchedules | null> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: newItem, error: createError } = await (supabase as any)
-        .from('items')
-        .insert(item)
-        .select()
-        .single()
+      const response = await fetch(`${API_BASE}/items`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...item, schedules }),
+      })
 
-      if (createError) throw createError
-      if (!newItem) throw new Error('No data returned from insert')
+      if (!response.ok) throw new Error('Failed to create item')
 
-      let itemSchedules: ItemSchedule[] = []
+      const newItem = (await response.json()) as ItemWithSchedules
 
-      // Create schedules if provided
-      if (schedules && schedules.length > 0) {
-        const schedulesToInsert = schedules.map((s) => ({
-          item_id: newItem.id,
-          time_slot: s.time_slot,
-          scheduled_time: s.scheduled_time,
-        }))
+      // Refetch to get the complete item with schedules
+      await fetchItems()
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: scheduleData, error: scheduleError } = await (supabase as any)
-          .from('item_schedules')
-          .insert(schedulesToInsert)
-          .select()
-
-        if (scheduleError) throw scheduleError
-        itemSchedules = scheduleData ?? []
-      }
-
-      const fullItem: ItemWithSchedules = {
-        ...newItem,
-        schedules: itemSchedules,
-      }
-
-      items.value.push(fullItem)
-      return fullItem
+      return items.value.find((i) => i.id === newItem.id) || null
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to create item'
       console.error('Error creating item:', e)
@@ -163,13 +114,13 @@ export const useItemsStore = defineStore('items', () => {
 
   async function updateItem(id: string, updates: ItemUpdate): Promise<boolean> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
-        .from('items')
-        .update(updates)
-        .eq('id', id)
+      const response = await fetch(`${API_BASE}/items/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
 
-      if (updateError) throw updateError
+      if (!response.ok) throw new Error('Failed to update item')
 
       // Update local state
       const index = items.value.findIndex((item) => item.id === id)

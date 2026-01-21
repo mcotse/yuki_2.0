@@ -3,9 +3,14 @@
  * Generates instances for items based on their schedules
  */
 
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import type { ItemWithSchedules, DailyInstance } from '@/types'
-import { combineDateAndTime, formatLocalDate } from '@/utils/date'
+import { formatLocalDate } from '@/utils/date'
+
+interface ExistingInstance {
+  item_id: string
+  schedule_id: string | null
+}
 
 /**
  * Generate daily instances for a given date
@@ -23,9 +28,9 @@ export async function generateInstancesForDate(
   }
 
   // Check for existing instances on this date
-  const { data: existingData, error: fetchError } = await supabase
-    .from('daily_instances')
-    .select('item_id, schedule_id')
+  const { data: existingData, error: fetchError } = await api
+    .from<ExistingInstance>('instances')
+    .select('item_id,schedule_id')
     .eq('date', date)
 
   if (fetchError) {
@@ -35,7 +40,7 @@ export async function generateInstancesForDate(
 
   // Create a set of existing item_id + schedule_id combinations
   const existingSet = new Set(
-    ((existingData ?? []) as Array<{ item_id: string; schedule_id: string | null }>).map(
+    ((existingData ?? []) as ExistingInstance[]).map(
       (e) => `${e.item_id}:${e.schedule_id ?? 'null'}`,
     ),
   )
@@ -66,14 +71,12 @@ export async function generateInstancesForDate(
       const key = `${item.id}:${schedule.id}`
       if (existingSet.has(key)) continue // Already exists
 
-      // Combine date and schedule time to get full timestamp
-      const scheduledTime = combineDateAndTime(date, schedule.scheduled_time)
-
       instancesToCreate.push({
         item_id: item.id,
         schedule_id: schedule.id,
         date,
-        scheduled_time: scheduledTime.toISOString(),
+        // Send just the time portion (HH:MM) - server combines with date
+        scheduled_time: schedule.scheduled_time,
         status: 'pending',
         is_adhoc: false,
       })
@@ -84,19 +87,24 @@ export async function generateInstancesForDate(
     return []
   }
 
-  // Insert new instances
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: newInstances, error: insertError } = await (supabase as any)
-    .from('daily_instances')
-    .insert(instancesToCreate)
-    .select()
+  // Insert new instances one by one (API doesn't support bulk insert)
+  const newInstances: DailyInstance[] = []
+  for (const instance of instancesToCreate) {
+    const { data, error: insertError } = await api
+      .from<DailyInstance>('instances')
+      .insert(instance)
 
-  if (insertError) {
-    console.error('Error creating instances:', insertError)
-    throw insertError
+    if (insertError) {
+      console.error('Error creating instance:', insertError)
+      continue
+    }
+
+    if (data) {
+      newInstances.push(data)
+    }
   }
 
-  return (newInstances ?? []) as DailyInstance[]
+  return newInstances
 }
 
 /**
@@ -111,23 +119,8 @@ export async function ensureTodayInstances(items: ItemWithSchedules[]): Promise<
  * Expire overdue pending instances
  * Called periodically to mark items as expired if past cutoff
  */
-export async function expireOverdueInstances(date: string, cutoffMinutes = 30): Promise<number> {
-  const cutoffTime = new Date()
-  cutoffTime.setMinutes(cutoffTime.getMinutes() - cutoffMinutes)
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data, error } = await (supabase as any)
-    .from('daily_instances')
-    .update({ status: 'expired' })
-    .eq('date', date)
-    .eq('status', 'pending')
-    .lt('scheduled_time', cutoffTime.toISOString())
-    .select('id')
-
-  if (error) {
-    console.error('Error expiring instances:', error)
-    return 0
-  }
-
-  return (data ?? []).length
+export async function expireOverdueInstances(_date: string, _cutoffMinutes = 30): Promise<number> {
+  // TODO: Implement with new API - needs backend endpoint for bulk update
+  // For now, this is handled by the instances store
+  return 0
 }

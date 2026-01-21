@@ -1,6 +1,6 @@
 // Service Worker for Yuki Care Tracker
-const STATIC_CACHE = 'yuki-static-v1'
-const DYNAMIC_CACHE = 'yuki-dynamic-v1'
+const STATIC_CACHE = 'yuki-static-v2'
+const DYNAMIC_CACHE = 'yuki-dynamic-v2'
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -44,8 +44,10 @@ self.addEventListener('fetch', (event) => {
   // Skip non-GET requests
   if (request.method !== 'GET') return
 
-  // Skip Supabase API calls - always go to network
+  // Skip API calls - always go to network
   if (url.hostname.includes('supabase')) return
+  if (url.pathname.startsWith('/api')) return
+  if (url.port === '3000' || url.port === '54321') return
 
   // For navigation requests, try network first
   if (request.mode === 'navigate') {

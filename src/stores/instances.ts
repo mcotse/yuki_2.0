@@ -1,6 +1,5 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { supabase } from '@/lib/supabase'
 import { useItemsStore } from './items'
 import { useAuthStore } from './auth'
 import type {
@@ -13,6 +12,8 @@ import type {
 import type { Database } from '@/types/database'
 
 type InstanceInsert = Database['public']['Tables']['daily_instances']['Insert']
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 // Conflict spacing in minutes (from spec)
 const CONFLICT_SPACING_MINUTES = 5
@@ -103,21 +104,15 @@ export const useInstancesStore = defineStore('instances', () => {
     selectedDate.value = date
 
     try {
-      // Ensure items are loaded
-      if (itemsStore.items.length === 0) {
-        await itemsStore.fetchItems()
-      }
+      // Always fetch items fresh to ensure we have the latest data
+      // This handles cases where new items are added during test runs
+      await itemsStore.fetchItems()
 
       // Fetch instances for the date
-      const { data: instancesData, error: fetchError } = await supabase
-        .from('daily_instances')
-        .select('*')
-        .eq('date', date)
+      const response = await fetch(`${API_BASE}/instances?date=${date}`)
+      if (!response.ok) throw new Error('Failed to fetch instances')
 
-      if (fetchError) throw fetchError
-
-      // Cast to proper types
-      const instanceRows = (instancesData ?? []) as unknown as DailyInstance[]
+      const instanceRows = (await response.json()) as DailyInstance[]
 
       // Join with items
       const joined: DailyInstanceWithItem[] = []
@@ -175,12 +170,24 @@ export const useInstancesStore = defineStore('instances', () => {
 
     const confirmedTime = new Date(mostRecent.confirmed_at!)
     const timeSince = now.getTime() - confirmedTime.getTime()
-    const remainingMs = conflictThreshold - timeSince
+
+    // Guard against invalid dates (NaN)
+    if (isNaN(timeSince)) {
+      return { hasConflict: false, canOverride: true }
+    }
+
+    const remainingMs = Math.max(0, conflictThreshold - timeSince)
+    const remainingMinutes = Math.ceil(remainingMs / 60000)
+
+    // Only show conflict if there's actually time remaining
+    if (remainingMinutes <= 0) {
+      return { hasConflict: false, canOverride: true }
+    }
 
     return {
       hasConflict: true,
       conflictingItemName: mostRecent.item.name,
-      remainingSeconds: Math.ceil(remainingMs / 1000),
+      remainingMinutes: Math.max(1, Math.min(remainingMinutes, CONFLICT_SPACING_MINUTES)),
       canOverride: true, // Always allow override as per spec
     }
   }
@@ -200,7 +207,7 @@ export const useInstancesStore = defineStore('instances', () => {
     if (!overrideConflict) {
       const conflict = checkConflict(instance)
       if (conflict.hasConflict) {
-        error.value = `Wait ${conflict.remainingSeconds}s - ${conflict.conflictingItemName} was just given`
+        error.value = `Wait ${conflict.remainingMinutes} min - ${conflict.conflictingItemName} was just given`
         return false
       }
     }
@@ -209,18 +216,18 @@ export const useInstancesStore = defineStore('instances', () => {
       const now = new Date().toISOString()
       const userId = authStore.currentUser?.id ?? null
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
-        .from('daily_instances')
-        .update({
+      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           status: 'confirmed',
           confirmed_at: now,
           confirmed_by: userId,
           notes: notes ?? null,
-        })
-        .eq('id', instanceId)
+        }),
+      })
 
-      if (updateError) throw updateError
+      if (!response.ok) throw new Error('Failed to confirm instance')
 
       // Update local state
       const index = instances.value.findIndex((i) => i.id === instanceId)
@@ -256,16 +263,16 @@ export const useInstancesStore = defineStore('instances', () => {
     try {
       const snoozeUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString()
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
-        .from('daily_instances')
-        .update({
+      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           status: 'snoozed',
           snooze_until: snoozeUntil,
-        })
-        .eq('id', instanceId)
+        }),
+      })
 
-      if (updateError) throw updateError
+      if (!response.ok) throw new Error('Failed to snooze instance')
 
       // Update local state
       const index = instances.value.findIndex((i) => i.id === instanceId)
@@ -318,15 +325,15 @@ export const useInstancesStore = defineStore('instances', () => {
         notes: notes ?? null,
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: newInstance, error: createError } = await (supabase as any)
-        .from('daily_instances')
-        .insert(instanceData)
-        .select()
-        .single()
+      const response = await fetch(`${API_BASE}/instances`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(instanceData),
+      })
 
-      if (createError) throw createError
-      if (!newInstance) throw new Error('No data returned from insert')
+      if (!response.ok) throw new Error('Failed to create instance')
+
+      const newInstance = await response.json()
 
       const fullInstance: DailyInstanceWithItem = {
         ...newInstance,

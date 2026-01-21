@@ -96,7 +96,7 @@ export interface ConfirmationResult {
 export interface ConflictCheck {
   hasConflict: boolean
   conflictingItemName?: string
-  remainingSeconds?: number
+  remainingMinutes?: number
   canOverride: boolean
 }
 

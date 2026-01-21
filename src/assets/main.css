@@ -24,18 +24,18 @@
   --color-info: #3B82F6;
 
   /* Typography - using @fontsource-variable */
-  --font-heading: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
-  --font-body: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-sans: 'Plus Jakarta Sans Variable', 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-display: 'Outfit Variable', 'Outfit', system-ui, sans-serif;
 
   /* Font Sizes (Major Third Scale - 1.25) */
-  --text-xs: 0.64rem;
-  --text-sm: 0.8rem;
-  --text-base: 1rem;
-  --text-lg: 1.25rem;
-  --text-xl: 1.563rem;
-  --text-2xl: 1.953rem;
-  --text-3xl: 2.441rem;
-  --text-4xl: 3.052rem;
+  --font-size-xs: 0.64rem;
+  --font-size-sm: 0.8rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.563rem;
+  --font-size-2xl: 1.953rem;
+  --font-size-3xl: 2.441rem;
+  --font-size-4xl: 3.052rem;
 
   /* Border Radius */
   --radius-sm: 8px;
@@ -64,19 +64,11 @@
   --duration-normal: 300ms;
   --duration-slow: 500ms;
 
-  /* Spacing */
-  --spacing-xs: 0.25rem;
-  --spacing-sm: 0.5rem;
-  --spacing-md: 1rem;
-  --spacing-lg: 1.5rem;
-  --spacing-xl: 2rem;
-  --spacing-2xl: 3rem;
-  --spacing-3xl: 4rem;
 }
 
 /* Base Styles */
 html {
-  font-family: var(--font-body);
+  font-family: var(--font-sans);
   background-color: var(--color-background);
   color: var(--color-foreground);
   -webkit-font-smoothing: antialiased;
@@ -88,9 +80,9 @@ body {
   line-height: 1.5;
 }
 
-/* Headings use Outfit font */
+/* Headings use Outfit display font */
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
+  font-family: var(--font-display);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -110,7 +102,7 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: center;
   gap: 0.5rem;
   padding: 0.75rem 1.5rem;
-  font-family: var(--font-body);
+  font-family: var(--font-sans);
   font-weight: 700;
   border-radius: var(--radius-full);
   border: var(--border-width) solid var(--color-foreground);
@@ -168,7 +160,7 @@ h1, h2, h3, h4, h5, h6 {
 .input {
   width: 100%;
   padding: 0.75rem 1rem;
-  font-family: var(--font-body);
+  font-family: var(--font-sans);
   background-color: var(--color-input);
   border: var(--border-width) solid #CBD5E1;
   border-radius: var(--radius-md);
@@ -185,7 +177,7 @@ h1, h2, h3, h4, h5, h6 {
 .label {
   display: block;
   font-weight: 700;
-  font-size: var(--text-sm);
+  font-size: var(--font-size-sm);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   margin-bottom: 0.5rem;
@@ -196,7 +188,7 @@ h1, h2, h3, h4, h5, h6 {
   display: inline-flex;
   align-items: center;
   padding: 0.25rem 0.75rem;
-  font-size: var(--text-sm);
+  font-size: var(--font-size-sm);
   font-weight: 600;
   border-radius: var(--radius-full);
   border: var(--border-width) solid var(--color-foreground);

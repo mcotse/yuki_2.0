@@ -1,9 +1,10 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { supabase } from '@/lib/supabase'
 import { useItemsStore } from './items'
 import type { DailyInstanceWithItem, DailyInstance } from '@/types'
 import { formatLocalDate } from '@/utils/date'
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
 
 export interface HistoryEntry {
   instance: DailyInstanceWithItem
@@ -37,39 +38,15 @@ export const useHistoryStore = defineStore('history', () => {
     selectedDate.value = date
 
     try {
-      // Ensure items are loaded
-      if (itemsStore.items.length === 0) {
-        await itemsStore.fetchItems()
-      }
+      // Always fetch items fresh to ensure we have the latest
+      await itemsStore.fetchItems()
 
-      // Fetch confirmed instances for the date
-      const { data: instancesData, error: fetchError } = await supabase
-        .from('daily_instances')
-        .select('*')
-        .eq('date', date)
-        .eq('status', 'confirmed')
-        .order('confirmed_at', { ascending: false })
+      // Fetch instances for the date (filter confirmed ones)
+      const response = await fetch(`${API_BASE}/instances?date=${date}`)
+      if (!response.ok) throw new Error('Failed to fetch instances')
 
-      if (fetchError) throw fetchError
-
-      const instanceRows = (instancesData ?? []) as unknown as DailyInstance[]
-
-      // Fetch user names for confirmed_by
-      const userIds = [...new Set(instanceRows.map(i => i.confirmed_by).filter(Boolean))]
-      const userMap = new Map<string, string>()
-
-      if (userIds.length > 0) {
-        const { data: usersData } = await supabase
-          .from('users')
-          .select('id, display_name')
-          .in('id', userIds)
-
-        if (usersData) {
-          for (const user of usersData as Array<{ id: string; display_name: string }>) {
-            userMap.set(user.id, user.display_name)
-          }
-        }
-      }
+      const allInstances = (await response.json()) as DailyInstance[]
+      const instanceRows = allInstances.filter(i => i.status === 'confirmed')
 
       // Build history entries
       const historyEntries: HistoryEntry[] = []
@@ -79,9 +56,7 @@ export const useHistoryStore = defineStore('history', () => {
           historyEntries.push({
             instance: { ...instance, item },
             confirmedAt: new Date(instance.confirmed_at!),
-            confirmedByName: instance.confirmed_by
-              ? userMap.get(instance.confirmed_by) ?? null
-              : null,
+            confirmedByName: null, // TODO: fetch user names if needed
           })
         }
       }
@@ -100,13 +75,13 @@ export const useHistoryStore = defineStore('history', () => {
     updates: { confirmed_at?: string; confirmed_by?: string | null; notes?: string | null }
   ): Promise<boolean> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: updateError } = await (supabase as any)
-        .from('daily_instances')
-        .update(updates)
-        .eq('id', instanceId)
+      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      })
 
-      if (updateError) throw updateError
+      if (!response.ok) throw new Error('Failed to update confirmation')
 
       // Refresh the list
       await fetchHistoryForDate(selectedDate.value)

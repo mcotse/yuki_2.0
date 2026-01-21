@@ -3,7 +3,8 @@ import { ref, onMounted } from 'vue'
 import { useHistoryStore, type HistoryEntry } from '@/stores/history'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime, formatDisplayDate, parseLocalDate, formatLocalDate } from '@/utils/date'
-import { RefreshCw, AlertCircle, Calendar, ChevronLeft, ChevronRight, Clock, User, Edit2, X, Check } from 'lucide-vue-next'
+import { RefreshCw, AlertCircle, Calendar, ChevronLeft, ChevronRight, Clock, User, Edit2, X, Check, Undo2, Droplet, Pill, Utensils, Leaf } from 'lucide-vue-next'
+import type { Item } from '@/types'
 
 const historyStore = useHistoryStore()
 const authStore = useAuthStore()
@@ -14,6 +15,7 @@ const editingEntry = ref<HistoryEntry | null>(null)
 const editTime = ref('')
 const editNotes = ref('')
 const isSaving = ref(false)
+const undoingId = ref<string | null>(null)
 
 // Navigate to previous/next day
 function goToPreviousDay() {
@@ -51,11 +53,64 @@ function selectDate() {
   }
 }
 
-function getLocationBadge(item: { category: string | null; location: string | null }) {
-  if (item.location === 'LEFT eye') return { text: 'L', color: 'bg-accent' }
-  if (item.location === 'RIGHT eye') return { text: 'R', color: 'bg-secondary' }
-  if (item.location === 'ORAL') return { text: 'O', color: 'bg-tertiary' }
-  return null
+// Get icon component based on item type and category (matches MedicationCard)
+function getItemIcon(item: Item) {
+  const category = item.category
+  const type = item.type
+
+  if (category === 'leftEye' || category === 'rightEye') return Droplet
+  if (type === 'supplement') return Leaf
+  if (type === 'food' || category === 'food') return Utensils
+  return Pill
+}
+
+// Get icon background class based on item type (matches MedicationCard)
+function getIconBgClass(item: Item) {
+  const category = item.category
+  const type = item.type
+
+  if (category === 'leftEye') return 'bg-accent/20'
+  if (category === 'rightEye') return 'bg-secondary/20'
+  if (type === 'supplement') return 'bg-emerald-500/20'
+  if (type === 'food' || category === 'food') return 'bg-amber-500/20'
+  if (category === 'oral') return 'bg-blue-500/20'
+  return 'bg-muted/50'
+}
+
+// Get icon color class based on item type (matches MedicationCard)
+function getIconColorClass(item: Item) {
+  const category = item.category
+  const type = item.type
+
+  if (category === 'leftEye') return 'text-accent'
+  if (category === 'rightEye') return 'text-secondary'
+  if (type === 'supplement') return 'text-emerald-600'
+  if (type === 'food' || category === 'food') return 'text-amber-600'
+  if (category === 'oral') return 'text-blue-600'
+  return 'text-muted-foreground'
+}
+
+// Get type label for badge
+function getTypeLabel(item: Item) {
+  if (item.type === 'supplement') return 'Supplement'
+  if (item.type === 'food') return 'Food'
+  return null // Don't show badge for regular medications
+}
+
+// Check if entry was previously undone (to prevent undo of undo)
+function wasEntryUndone(entry: HistoryEntry): boolean {
+  return entry.instance.notes?.includes('[Undone') ?? false
+}
+
+async function handleUndo(entry: HistoryEntry) {
+  if (undoingId.value) return
+
+  undoingId.value = entry.instance.id
+  try {
+    await historyStore.undoConfirmation(entry.instance.id)
+  } finally {
+    undoingId.value = null
+  }
 }
 
 function startEdit(entry: HistoryEntry) {
@@ -151,26 +206,28 @@ onMounted(() => {
     </div>
 
     <!-- History List -->
-    <div v-else-if="historyStore.entriesByTime.length > 0" class="space-y-3">
+    <TransitionGroup
+      v-else-if="historyStore.entriesByTime.length > 0"
+      name="card-list"
+      tag="div"
+      class="space-y-3"
+    >
       <div
         v-for="entry in historyStore.entriesByTime"
         :key="entry.instance.id"
         class="card p-4"
       >
         <div class="flex items-start gap-3">
-          <!-- Location Badge -->
+          <!-- Icon (consistent with Dashboard) -->
           <div
-            v-if="getLocationBadge(entry.instance.item)"
-            class="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm"
-            :class="getLocationBadge(entry.instance.item)?.color"
+            class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            :class="getIconBgClass(entry.instance.item)"
           >
-            {{ getLocationBadge(entry.instance.item)?.text }}
-          </div>
-          <div
-            v-else
-            class="w-10 h-10 rounded-xl bg-quaternary flex items-center justify-center"
-          >
-            <Check class="w-5 h-5 text-foreground" />
+            <component
+              :is="getItemIcon(entry.instance.item)"
+              class="w-5 h-5"
+              :class="getIconColorClass(entry.instance.item)"
+            />
           </div>
 
           <!-- Content -->
@@ -185,14 +242,29 @@ onMounted(() => {
                 </p>
               </div>
 
-              <!-- Edit Button (Admin Only) -->
-              <button
-                v-if="authStore.isAdmin"
-                class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                @click="startEdit(entry)"
-              >
-                <Edit2 class="w-4 h-4 text-muted-foreground" />
-              </button>
+              <!-- Action Buttons -->
+              <div class="flex items-center gap-1">
+                <!-- Undo Button (not shown if already undone) -->
+                <button
+                  v-if="!wasEntryUndone(entry)"
+                  class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                  :class="{ 'animate-pulse': undoingId === entry.instance.id }"
+                  :disabled="undoingId === entry.instance.id"
+                  title="Undo confirmation"
+                  @click="handleUndo(entry)"
+                >
+                  <Undo2 class="w-4 h-4 text-muted-foreground" />
+                </button>
+
+                <!-- Edit Button (Admin Only) -->
+                <button
+                  v-if="authStore.isAdmin"
+                  class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                  @click="startEdit(entry)"
+                >
+                  <Edit2 class="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
             </div>
 
             <!-- Meta Info -->
@@ -212,17 +284,29 @@ onMounted(() => {
               "{{ entry.instance.notes }}"
             </p>
 
-            <!-- Ad-hoc Badge -->
-            <span
-              v-if="entry.instance.is_adhoc"
-              class="inline-block mt-2 px-2 py-0.5 text-xs font-medium bg-tertiary/20 text-tertiary rounded-full"
-            >
-              Ad-hoc
-            </span>
+            <!-- Type & Ad-hoc Badges -->
+            <div class="flex flex-wrap gap-2 mt-2">
+              <span
+                v-if="getTypeLabel(entry.instance.item)"
+                class="inline-block px-2 py-0.5 text-xs font-medium rounded-full"
+                :class="{
+                  'bg-emerald-500/20 text-emerald-700': entry.instance.item.type === 'supplement',
+                  'bg-amber-500/20 text-amber-700': entry.instance.item.type === 'food',
+                }"
+              >
+                {{ getTypeLabel(entry.instance.item) }}
+              </span>
+              <span
+                v-if="entry.instance.is_adhoc"
+                class="inline-block px-2 py-0.5 text-xs font-medium bg-tertiary/20 text-tertiary rounded-full"
+              >
+                Ad-hoc
+              </span>
+            </div>
           </div>
         </div>
       </div>
-    </div>
+    </TransitionGroup>
 
     <!-- Empty State -->
     <div v-else class="py-12 text-center">

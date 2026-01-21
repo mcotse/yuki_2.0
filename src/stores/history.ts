@@ -93,6 +93,41 @@ export const useHistoryStore = defineStore('history', () => {
     }
   }
 
+  async function undoConfirmation(instanceId: string): Promise<boolean> {
+    const entry = entries.value.find((e) => e.instance.id === instanceId)
+    if (!entry) {
+      error.value = 'Entry not found'
+      return false
+    }
+
+    try {
+      const now = new Date()
+      const undoNote = `[Undone at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}]`
+      const existingNotes = entry.instance.notes ? `${entry.instance.notes} ` : ''
+
+      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'pending',
+          confirmed_at: null,
+          confirmed_by: null,
+          notes: existingNotes + undoNote,
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to undo confirmation')
+
+      // Remove from local state (it's no longer confirmed)
+      entries.value = entries.value.filter((e) => e.instance.id !== instanceId)
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to undo'
+      console.error('Error undoing confirmation:', e)
+      return false
+    }
+  }
+
   function $reset() {
     entries.value = []
     selectedDate.value = formatLocalDate(new Date())
@@ -114,6 +149,7 @@ export const useHistoryStore = defineStore('history', () => {
     // Actions
     fetchHistoryForDate,
     updateConfirmation,
+    undoConfirmation,
     $reset,
   }
 })

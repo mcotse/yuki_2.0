@@ -304,6 +304,66 @@ export const useInstancesStore = defineStore('instances', () => {
     }
   }
 
+  async function undoConfirmation(instanceId: string): Promise<boolean> {
+    const instance = instances.value.find((i) => i.id === instanceId)
+    if (!instance) {
+      error.value = 'Instance not found'
+      return false
+    }
+
+    if (instance.status !== 'confirmed') {
+      error.value = 'Instance is not confirmed'
+      return false
+    }
+
+    try {
+      const now = new Date()
+      const undoNote = `[Undone at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}]`
+      const existingNotes = instance.notes ? `${instance.notes} ` : ''
+
+      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'pending',
+          confirmed_at: null,
+          confirmed_by: null,
+          notes: existingNotes + undoNote,
+        }),
+      })
+
+      if (!response.ok) throw new Error('Failed to undo confirmation')
+
+      // Update local state
+      const index = instances.value.findIndex((i) => i.id === instanceId)
+      if (index !== -1) {
+        const existing = instances.value[index]!
+        instances.value[index] = {
+          id: existing.id,
+          item_id: existing.item_id,
+          schedule_id: existing.schedule_id,
+          date: existing.date,
+          scheduled_time: existing.scheduled_time,
+          status: 'pending',
+          confirmed_at: null,
+          confirmed_by: null,
+          snooze_until: null,
+          notes: existingNotes + undoNote,
+          is_adhoc: existing.is_adhoc,
+          created_at: existing.created_at,
+          updated_at: existing.updated_at,
+          item: existing.item,
+        }
+      }
+
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to undo'
+      console.error('Error undoing confirmation:', e)
+      return false
+    }
+  }
+
   async function createAdHocInstance(
     itemId: string,
     scheduledTime: Date,
@@ -380,6 +440,7 @@ export const useInstancesStore = defineStore('instances', () => {
     refreshInstances,
     checkConflict,
     confirmInstance,
+    undoConfirmation,
     snoozeInstance,
     createAdHocInstance,
     $reset,

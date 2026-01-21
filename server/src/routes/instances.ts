@@ -127,7 +127,10 @@ router.patch('/:id', async (req, res, next) => {
       binds.status = req.body.status
     }
     if (req.body.confirmed_at !== undefined) {
-      updates.push('confirmed_at = TO_TIMESTAMP(:confirmed_at, \'YYYY-MM-DD"T"HH24:MI:SS.FF3"Z"\')')
+      // Parse UTC ISO string and convert to local timezone (PST/PDT)
+      // FROM_TZ marks the timestamp as UTC, AT TIME ZONE converts to local,
+      // CAST extracts as plain TIMESTAMP for storage
+      updates.push("confirmed_at = CAST(FROM_TZ(TO_TIMESTAMP(:confirmed_at, 'YYYY-MM-DD\"T\"HH24:MI:SS.FF3\"Z\"'), 'UTC') AT TIME ZONE 'America/Los_Angeles' AS TIMESTAMP)")
       binds.confirmed_at = req.body.confirmed_at
     }
     if (req.body.confirmed_by !== undefined) {

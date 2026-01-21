@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useItemsStore } from '@/stores/items'
 import { useInstancesStore } from '@/stores/instances'
 import { generateInstancesForDate } from '@/services/instanceGenerator'
 import { getToday } from '@/utils/date'
 import MedicationCard from '@/components/dashboard/MedicationCard.vue'
-import { RefreshCw, AlertCircle } from 'lucide-vue-next'
+import { RefreshCw, AlertCircle, ChevronDown, Droplet, Pill, Leaf, Utensils, X } from 'lucide-vue-next'
+import type { ScheduledInstance } from '@/types'
 
 const itemsStore = useItemsStore()
 const instancesStore = useInstancesStore()
@@ -16,6 +17,46 @@ const error = computed(() => itemsStore.error || instancesStore.error)
 
 // Use storeToRefs to maintain reactivity for computed properties
 const { instancesByStatus, pendingCount, confirmedCount } = storeToRefs(instancesStore)
+
+// Filter state
+const activeFilter = ref<string | null>(null)
+
+// Collapsible section states
+const overdueCollapsed = ref(false)
+const completedCollapsed = ref(false)
+
+// Filter options with icons and colors
+const filterOptions = [
+  { id: 'leftEye', label: 'Left Eye', icon: Droplet, colorClass: 'bg-accent/20 text-accent border-accent/40' },
+  { id: 'rightEye', label: 'Right Eye', icon: Droplet, colorClass: 'bg-secondary/20 text-secondary border-secondary/40' },
+  { id: 'oral', label: 'Oral', icon: Pill, colorClass: 'bg-blue-500/20 text-blue-600 border-blue-500/40' },
+  { id: 'supplement', label: 'Supplements', icon: Leaf, colorClass: 'bg-emerald-500/20 text-emerald-600 border-emerald-500/40' },
+  { id: 'food', label: 'Food', icon: Utensils, colorClass: 'bg-amber-500/20 text-amber-600 border-amber-500/40' },
+]
+
+// Filter function for instances
+function filterInstances(instances: ScheduledInstance[]): ScheduledInstance[] {
+  if (!activeFilter.value) return instances
+  return instances.filter((instance) => {
+    const category = instance.item.category
+    const type = instance.item.type
+    if (activeFilter.value === 'supplement') return type === 'supplement'
+    if (activeFilter.value === 'food') return type === 'food' || category === 'food'
+    return category === activeFilter.value
+  })
+}
+
+// Filtered instances by status
+const filteredOverdue = computed(() => filterInstances(instancesByStatus.value.overdue))
+const filteredDue = computed(() => filterInstances(instancesByStatus.value.due))
+const filteredSnoozed = computed(() => filterInstances(instancesByStatus.value.snoozed))
+const filteredUpcoming = computed(() => filterInstances(instancesByStatus.value.upcoming))
+const filteredConfirmed = computed(() => filterInstances(instancesByStatus.value.confirmed))
+
+// Toggle filter
+function toggleFilter(filterId: string) {
+  activeFilter.value = activeFilter.value === filterId ? null : filterId
+}
 
 async function loadDashboard() {
   // Load items first
@@ -39,13 +80,17 @@ function confirmMedication(instanceId: string, overrideConflict: boolean) {
   instancesStore.confirmInstance(instanceId, undefined, overrideConflict)
 }
 
+function undoMedication(instanceId: string) {
+  instancesStore.undoConfirmation(instanceId)
+}
+
 onMounted(loadDashboard)
 </script>
 
 <template>
   <main class="p-6 pb-24 max-w-lg mx-auto">
     <!-- Header -->
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-4">
       <div>
         <h1 class="text-2xl font-bold text-foreground">Today</h1>
         <p class="text-sm text-muted-foreground">
@@ -58,6 +103,28 @@ onMounted(loadDashboard)
         @click="refreshDashboard"
       >
         <RefreshCw class="w-5 h-5 text-foreground" :class="{ 'animate-spin': isLoading }" />
+      </button>
+    </div>
+
+    <!-- Filter Tags -->
+    <div class="flex flex-wrap gap-2 mb-6 overflow-x-auto pb-1">
+      <button
+        v-for="filter in filterOptions"
+        :key="filter.id"
+        class="filter-tag group"
+        :class="[
+          activeFilter === filter.id
+            ? filter.colorClass + ' border-2 shadow-sm'
+            : 'bg-muted/50 text-muted-foreground border border-border hover:border-foreground/30',
+        ]"
+        @click="toggleFilter(filter.id)"
+      >
+        <component :is="filter.icon" class="w-3.5 h-3.5" />
+        <span class="text-xs font-semibold whitespace-nowrap">{{ filter.label }}</span>
+        <X
+          v-if="activeFilter === filter.id"
+          class="w-3 h-3 ml-0.5 opacity-60 group-hover:opacity-100"
+        />
       </button>
     </div>
 
@@ -79,82 +146,114 @@ onMounted(loadDashboard)
     <template v-else>
       <!-- Overdue Section -->
       <section v-if="instancesByStatus.overdue.length > 0" class="mb-8">
-        <h2 class="text-sm font-bold text-error uppercase tracking-wider mb-3">
-          Overdue
-        </h2>
-        <div class="space-y-3">
-          <MedicationCard
-            v-for="instance in instancesByStatus.overdue"
-            :key="instance.id"
-            :instance="instance"
-            status="overdue"
-            @confirm="confirmMedication(instance.id, $event)"
-            @snooze="instancesStore.snoozeInstance(instance.id, $event)"
+        <button
+          class="flex items-center gap-2 w-full text-left mb-3 group"
+          @click="overdueCollapsed = !overdueCollapsed"
+        >
+          <h2 class="text-sm font-bold text-error uppercase tracking-wider">
+            Overdue
+          </h2>
+          <span class="text-xs text-error/70 font-medium">({{ filteredOverdue.length }})</span>
+          <ChevronDown
+            class="w-4 h-4 text-error/70 transition-transform duration-300"
+            :class="{ '-rotate-180': overdueCollapsed }"
           />
-        </div>
+        </button>
+        <Transition name="collapse">
+          <div v-show="!overdueCollapsed" class="collapse-content">
+            <TransitionGroup name="card-filter" tag="div" class="space-y-3">
+              <MedicationCard
+                v-for="instance in filteredOverdue"
+                :key="instance.id"
+                :instance="instance"
+                status="overdue"
+                @confirm="confirmMedication(instance.id, $event)"
+                @snooze="instancesStore.snoozeInstance(instance.id, $event)"
+              />
+            </TransitionGroup>
+          </div>
+        </Transition>
       </section>
 
       <!-- Due Now Section -->
       <section v-if="instancesByStatus.due.length > 0" class="mb-8">
         <h2 class="text-sm font-bold text-accent uppercase tracking-wider mb-3">
           Due Now
+          <span v-if="activeFilter" class="text-xs text-accent/70 font-medium ml-1">({{ filteredDue.length }})</span>
         </h2>
-        <div class="space-y-3">
+        <TransitionGroup name="card-filter" tag="div" class="space-y-3">
           <MedicationCard
-            v-for="instance in instancesByStatus.due"
+            v-for="instance in filteredDue"
             :key="instance.id"
             :instance="instance"
             status="due"
             @confirm="confirmMedication(instance.id, $event)"
             @snooze="instancesStore.snoozeInstance(instance.id, $event)"
           />
-        </div>
+        </TransitionGroup>
       </section>
 
       <!-- Snoozed Section -->
       <section v-if="instancesByStatus.snoozed.length > 0" class="mb-8">
         <h2 class="text-sm font-bold text-tertiary uppercase tracking-wider mb-3">
           Snoozed
+          <span v-if="activeFilter" class="text-xs text-tertiary/70 font-medium ml-1">({{ filteredSnoozed.length }})</span>
         </h2>
-        <div class="space-y-3">
+        <TransitionGroup name="card-filter" tag="div" class="space-y-3">
           <MedicationCard
-            v-for="instance in instancesByStatus.snoozed"
+            v-for="instance in filteredSnoozed"
             :key="instance.id"
             :instance="instance"
             status="snoozed"
             @confirm="confirmMedication(instance.id, $event)"
           />
-        </div>
+        </TransitionGroup>
       </section>
 
       <!-- Upcoming Section -->
       <section v-if="instancesByStatus.upcoming.length > 0" class="mb-8">
         <h2 class="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">
           Coming Up
+          <span v-if="activeFilter" class="text-xs text-muted-foreground/70 font-medium ml-1">({{ filteredUpcoming.length }})</span>
         </h2>
-        <div class="space-y-3">
+        <TransitionGroup name="card-filter" tag="div" class="space-y-3">
           <MedicationCard
-            v-for="instance in instancesByStatus.upcoming"
+            v-for="instance in filteredUpcoming"
             :key="instance.id"
             :instance="instance"
             status="upcoming"
           />
-        </div>
+        </TransitionGroup>
       </section>
 
       <!-- Completed Section -->
       <section v-if="instancesByStatus.confirmed.length > 0" class="mb-8">
-        <h2 class="text-sm font-bold text-quaternary uppercase tracking-wider mb-3">
-          Completed
-        </h2>
-        <div class="space-y-3">
-          <MedicationCard
-            v-for="instance in instancesByStatus.confirmed"
-            :key="instance.id"
-            :instance="instance"
-            status="confirmed"
+        <button
+          class="flex items-center gap-2 w-full text-left mb-3 group"
+          @click="completedCollapsed = !completedCollapsed"
+        >
+          <h2 class="text-sm font-bold text-quaternary uppercase tracking-wider">
+            Completed
+          </h2>
+          <span class="text-xs text-quaternary/70 font-medium">({{ filteredConfirmed.length }})</span>
+          <ChevronDown
+            class="w-4 h-4 text-quaternary/70 transition-transform duration-300"
+            :class="{ '-rotate-180': completedCollapsed }"
           />
-        </div>
+        </button>
+        <Transition name="collapse">
+          <div v-show="!completedCollapsed" class="collapse-content">
+            <TransitionGroup name="card-filter" tag="div" class="space-y-3">
+              <MedicationCard
+                v-for="instance in filteredConfirmed"
+                :key="instance.id"
+                :instance="instance"
+                status="confirmed"
+                @undo="undoMedication(instance.id)"
+              />
+            </TransitionGroup>
+          </div>
+        </Transition>
       </section>
 
       <!-- Empty State -->

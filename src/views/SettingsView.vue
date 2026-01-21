@@ -48,7 +48,10 @@ function handleLogout() {
         Admin
       </h2>
       <div class="card divide-y divide-muted">
-        <button class="w-full flex items-center gap-4 p-4 text-left hover:bg-muted/50 transition-colors">
+        <button
+          class="w-full flex items-center gap-4 p-4 text-left hover:bg-muted/50 transition-colors"
+          @click="router.push('/admin/medications')"
+        >
           <div class="w-10 h-10 bg-secondary/20 rounded-xl flex items-center justify-center">
             <Pill class="w-5 h-5 text-secondary" />
           </div>

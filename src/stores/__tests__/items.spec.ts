@@ -195,4 +195,106 @@ describe('items store', () => {
       expect(store.error).toBeNull()
     })
   })
+
+  describe('deactivateItem', () => {
+    it('sets item active to false', async () => {
+      const store = useItemsStore()
+      store.items = [...mockItems]
+
+      // Mock fetch
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+
+      const result = await store.deactivateItem('item-1')
+
+      expect(result).toBe(true)
+      expect(store.items.find(i => i.id === 'item-1')?.active).toBe(false)
+    })
+  })
+
+  describe('reactivateItem', () => {
+    it('sets item active to true', async () => {
+      const store = useItemsStore()
+      store.items = [...mockItems]
+
+      // Mock fetch
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+
+      const result = await store.reactivateItem('item-3')
+
+      expect(result).toBe(true)
+      expect(store.items.find(i => i.id === 'item-3')?.active).toBe(true)
+    })
+  })
+
+  describe('updateItem', () => {
+    it('updates item properties', async () => {
+      const store = useItemsStore()
+      store.items = [...mockItems]
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({}),
+      })
+
+      const result = await store.updateItem('item-1', {
+        name: 'Updated Name',
+        dose: '2 drops',
+      })
+
+      expect(result).toBe(true)
+      const updatedItem = store.items.find(i => i.id === 'item-1')
+      expect(updatedItem?.name).toBe('Updated Name')
+      expect(updatedItem?.dose).toBe('2 drops')
+    })
+
+    it('returns false on API error', async () => {
+      const store = useItemsStore()
+      store.items = [...mockItems]
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+      })
+
+      const result = await store.updateItem('item-1', { name: 'Test' })
+
+      expect(result).toBe(false)
+      expect(store.error).toBe('Failed to update item')
+    })
+  })
+
+  describe('fetchItems', () => {
+    it('fetches items from API and updates store', async () => {
+      const store = useItemsStore()
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(mockItems),
+      })
+
+      await store.fetchItems()
+
+      expect(store.items).toEqual(mockItems)
+      expect(store.isLoading).toBe(false)
+      expect(store.lastFetched).not.toBeNull()
+    })
+
+    it('sets error on API failure', async () => {
+      const store = useItemsStore()
+
+      global.fetch = vi.fn().mockResolvedValue({
+        ok: false,
+      })
+
+      await store.fetchItems()
+
+      expect(store.error).toBe('Failed to fetch items')
+      expect(store.isLoading).toBe(false)
+    })
+  })
 })

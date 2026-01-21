@@ -248,3 +248,172 @@ h1, h2, h3, h4, h5, h6 {
     box-shadow: 4px 4px 0px 0px var(--color-border);
   }
 }
+
+/* ============================================
+   Card List Transitions (TransitionGroup)
+   ============================================ */
+
+/* Base state for all cards in transition groups */
+.card-list-move,
+.card-list-enter-move {
+  transition: transform 0.4s var(--ease-bounce);
+}
+
+/* Leaving card - fades and shrinks into background */
+.card-list-leave-active {
+  transition:
+    opacity 0.35s ease-out,
+    transform 0.35s var(--ease-bounce),
+    filter 0.35s ease-out;
+  position: absolute;
+  width: 100%;
+}
+
+.card-list-leave-to {
+  opacity: 0;
+  transform: scale(0.92) translateY(-8px);
+  filter: blur(2px);
+}
+
+/* Entering card (for non-completed sections) - subtle fade in */
+.card-list-enter-active {
+  transition:
+    opacity 0.3s ease-out,
+    transform 0.3s var(--ease-bounce);
+}
+
+.card-list-enter-from {
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+/* Completed section - cards enter with a celebratory feel */
+.card-list-enter-move {
+  transition: transform 0.4s var(--ease-bounce);
+}
+
+.card-list-enter-leave-active {
+  transition:
+    opacity 0.35s ease-out,
+    transform 0.35s var(--ease-bounce);
+  position: absolute;
+  width: 100%;
+}
+
+.card-list-enter-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+.card-list-enter-enter-active {
+  transition:
+    opacity 0.4s ease-out 0.1s,
+    transform 0.5s var(--ease-bounce) 0.1s;
+}
+
+.card-list-enter-enter-from {
+  opacity: 0;
+  transform: scale(0.95) translateY(-20px);
+}
+
+/* Ensure parent containers handle absolute positioning during leave */
+.space-y-3 {
+  position: relative;
+}
+
+/* ============================================
+   Filter Tag Styles
+   ============================================ */
+
+.filter-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: var(--radius-full);
+  transition: all 0.25s var(--ease-bounce);
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-tag:hover {
+  transform: translateY(-1px);
+}
+
+.filter-tag:active {
+  transform: scale(0.97);
+}
+
+/* ============================================
+   Collapse/Expand Transitions
+   ============================================ */
+
+.collapse-content {
+  overflow: hidden;
+}
+
+.collapse-enter-active {
+  animation: collapseOpen 0.35s var(--ease-bounce);
+}
+
+.collapse-leave-active {
+  animation: collapseClose 0.3s ease-out forwards;
+}
+
+@keyframes collapseOpen {
+  0% {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    max-height: 2000px;
+    transform: translateY(0);
+  }
+}
+
+@keyframes collapseClose {
+  0% {
+    opacity: 1;
+    max-height: 2000px;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-8px);
+  }
+}
+
+/* ============================================
+   Card Filter Transitions (for tag filtering)
+   ============================================ */
+
+.card-filter-move {
+  transition: transform 0.35s var(--ease-bounce);
+}
+
+.card-filter-enter-active {
+  transition:
+    opacity 0.3s ease-out,
+    transform 0.35s var(--ease-bounce);
+}
+
+.card-filter-leave-active {
+  transition:
+    opacity 0.25s ease-out,
+    transform 0.25s ease-out;
+  position: absolute;
+  width: 100%;
+}
+
+.card-filter-enter-from {
+  opacity: 0;
+  transform: scale(0.95) translateX(-12px);
+}
+
+.card-filter-leave-to {
+  opacity: 0;
+  transform: scale(0.9) translateX(12px);
+}

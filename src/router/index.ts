@@ -28,6 +28,12 @@ const router = createRouter({
       component: () => import('@/views/LoginView.vue'),
       meta: { requiresAuth: false },
     },
+    {
+      path: '/admin/medications',
+      name: 'admin-medications',
+      component: () => import('@/views/AdminMedicationsView.vue'),
+      meta: { title: 'Manage Medications', requiresAuth: true, requiresAdmin: true },
+    },
     // Catch-all redirect to dashboard
     {
       path: '/:pathMatch(.*)*',
@@ -46,11 +52,16 @@ router.beforeEach((to, _from, next) => {
   }
 
   const requiresAuth = to.meta.requiresAuth !== false
+  const requiresAdmin = to.meta.requiresAdmin === true
   const isAuthenticated = authStore.isAuthenticated
+  const isAdmin = authStore.isAdmin
 
   if (requiresAuth && !isAuthenticated) {
     // Redirect to login if auth required but not authenticated
     next({ name: 'login' })
+  } else if (requiresAdmin && !isAdmin) {
+    // Redirect to settings if admin required but user is not admin
+    next({ name: 'settings' })
   } else if (to.name === 'login' && isAuthenticated) {
     // Redirect to dashboard if already authenticated and trying to access login
     next({ name: 'dashboard' })

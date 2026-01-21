@@ -323,8 +323,11 @@ section {
 }
 
 /* Ensure parent containers handle absolute positioning during leave */
+/* Also add padding for card hover effects and shadows */
 .space-y-3 {
   position: relative;
+  padding: 4px 0;
+  margin: -4px 0;
 }
 
 /* ============================================
@@ -396,6 +399,9 @@ section {
 
 .collapse-content {
   overflow: hidden;
+  /* Add padding to accommodate card shadows and hover effects inside the clipped area */
+  padding: 12px;
+  margin: -12px;
 }
 
 /* Dashboard main container - prevents shadow clipping */

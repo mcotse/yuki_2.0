@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useHistoryStore, type HistoryEntry } from '@/stores/history'
-import { supabase } from '@/lib/supabase'
+import { collection, getDocs, orderBy, query } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import { COLLECTIONS } from '@/types/database'
 import { formatDisplayDate, parseLocalDate, formatLocalDate } from '@/utils/date'
 import { RefreshCw, AlertCircle, Calendar, ChevronLeft, ChevronRight, Clock, X } from 'lucide-vue-next'
 import HistoryEntryComponent from '@/components/history/HistoryEntry.vue'
@@ -19,12 +21,17 @@ const users = ref<Array<{ id: string; display_name: string }>>([])
 
 // Fetch users for the confirmer dropdown
 async function fetchUsers() {
-  const { data } = await supabase
-    .from('users')
-    .select('id, display_name')
-    .order('display_name')
-  if (data) {
-    users.value = data as Array<{ id: string; display_name: string }>
+  if (!db) return
+  try {
+    const usersRef = collection(db, COLLECTIONS.USERS)
+    const q = query(usersRef, orderBy('display_name'))
+    const snapshot = await getDocs(q)
+    users.value = snapshot.docs.map(doc => ({
+      id: doc.id,
+      display_name: doc.data().display_name || 'Unknown',
+    }))
+  } catch (error) {
+    console.error('Error fetching users:', error)
   }
 }
 

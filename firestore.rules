@@ -1,0 +1,66 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isAuthenticated() &&
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Users collection - authenticated users can read their own data, admins can manage
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // Pets collection - authenticated read, admin-only write
+    match /pets/{petId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Items (medications) collection - authenticated read, admin-only write
+    match /items/{itemId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Item schedules collection - authenticated read, admin-only write
+    match /item_schedules/{scheduleId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // Daily instances collection - authenticated users can read and write their confirmations
+    match /daily_instances/{instanceId} {
+      allow read: if isAuthenticated();
+      // Allow authenticated users to update status, confirm, snooze
+      allow update: if isAuthenticated() &&
+                      (request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['status', 'confirmed_at', 'confirmed_by', 'snooze_until', 'notes', 'updated_at']));
+      // Only admins can create or delete instances
+      allow create, delete: if isAdmin();
+    }
+
+    // Confirmation history collection - authenticated read, write for confirmations
+    match /confirmation_history/{historyId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    // Conflict groups collection - authenticated read, admin-only write
+    match /conflict_groups/{groupId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+  }
+}

@@ -1,12 +1,20 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import type { Item, ItemSchedule, ItemWithSchedules, ItemCategory, ItemType } from '@/types'
-import type { Database } from '@/types/database'
-
-type ItemInsert = Database['public']['Tables']['items']['Insert']
-type ItemUpdate = Database['public']['Tables']['items']['Update']
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+import {
+  collection,
+  getDocs,
+  doc,
+  addDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  type DocumentData,
+} from 'firebase/firestore'
+import { db } from '@/lib/firebase'
+import type { Item, ItemSchedule, ItemWithSchedules, ItemCategory, ItemType, ItemInput } from '@/types'
+import { COLLECTIONS } from '@/types/database'
 
 export const useItemsStore = defineStore('items', () => {
   // State
@@ -57,18 +65,50 @@ export const useItemsStore = defineStore('items', () => {
   const rightEyeMeds = computed(() => itemsByCategory.value.rightEye)
   const oralMeds = computed(() => itemsByCategory.value.oral)
 
+  // Helper to convert Firestore doc to ItemWithSchedules
+  function docToItem(docData: DocumentData, id: string): ItemWithSchedules {
+    return {
+      id,
+      pet_id: docData.pet_id || null,
+      type: docData.type || 'medication',
+      category: docData.category || null,
+      name: docData.name || '',
+      dose: docData.dose || null,
+      location: docData.location || null,
+      notes: docData.notes || null,
+      frequency: docData.frequency || '1x_daily',
+      active: docData.active !== false,
+      start_date: docData.start_date || null,
+      end_date: docData.end_date || null,
+      conflict_group: docData.conflict_group || null,
+      created_at: docData.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+      updated_at: docData.updated_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+      schedules: (docData.schedules || []).map((s: DocumentData, idx: number) => ({
+        id: s.id || `${id}-schedule-${idx}`,
+        item_id: id,
+        time_slot: s.time_slot || '',
+        scheduled_time: s.scheduled_time || '',
+        created_at: s.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+      })) as ItemSchedule[],
+    }
+  }
+
   // Actions
   async function fetchItems(): Promise<void> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return
+    }
+
     isLoading.value = true
     error.value = null
 
     try {
-      // Fetch all items with schedules from REST API
-      const response = await fetch(`${API_BASE}/items`)
-      if (!response.ok) throw new Error('Failed to fetch items')
+      const itemsRef = collection(db, COLLECTIONS.ITEMS)
+      const q = query(itemsRef, orderBy('name'))
+      const snapshot = await getDocs(q)
 
-      const itemsData = (await response.json()) as ItemWithSchedules[]
-      items.value = itemsData
+      items.value = snapshot.docs.map((doc) => docToItem(doc.data(), doc.id))
       lastFetched.value = new Date()
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch items'
@@ -87,24 +127,54 @@ export const useItemsStore = defineStore('items', () => {
   }
 
   async function createItem(
-    item: ItemInsert,
+    itemData: Partial<ItemInput>,
     schedules?: Array<{ time_slot: string; scheduled_time: string }>,
   ): Promise<ItemWithSchedules | null> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return null
+    }
+
     try {
-      const response = await fetch(`${API_BASE}/items`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...item, schedules }),
-      })
+      const itemsRef = collection(db, COLLECTIONS.ITEMS)
 
-      if (!response.ok) throw new Error('Failed to create item')
+      const newItemData = {
+        pet_id: itemData.pet_id || null,
+        type: itemData.type || 'medication',
+        category: itemData.category || null,
+        name: itemData.name || '',
+        dose: itemData.dose || null,
+        location: itemData.location || null,
+        notes: itemData.notes || null,
+        frequency: itemData.frequency || '1x_daily',
+        active: itemData.active !== false,
+        start_date: itemData.start_date || null,
+        end_date: itemData.end_date || null,
+        conflict_group: itemData.conflict_group || null,
+        schedules: schedules || [],
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      }
 
-      const newItem = (await response.json()) as ItemWithSchedules
+      const docRef = await addDoc(itemsRef, newItemData)
 
-      // Refetch to get the complete item with schedules
-      await fetchItems()
+      // Create local item with ID
+      const newItem: ItemWithSchedules = {
+        id: docRef.id,
+        ...newItemData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        schedules: (schedules || []).map((s, idx) => ({
+          id: `${docRef.id}-schedule-${idx}`,
+          item_id: docRef.id,
+          time_slot: s.time_slot,
+          scheduled_time: s.scheduled_time,
+          created_at: new Date().toISOString(),
+        })),
+      }
 
-      return items.value.find((i) => i.id === newItem.id) || null
+      items.value.push(newItem)
+      return newItem
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to create item'
       console.error('Error creating item:', e)
@@ -112,26 +182,73 @@ export const useItemsStore = defineStore('items', () => {
     }
   }
 
-  async function updateItem(id: string, updates: ItemUpdate): Promise<boolean> {
-    try {
-      const response = await fetch(`${API_BASE}/items/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      })
+  async function updateItem(id: string, updates: Partial<Item>): Promise<boolean> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return false
+    }
 
-      if (!response.ok) throw new Error('Failed to update item')
+    try {
+      const itemRef = doc(db, COLLECTIONS.ITEMS, id)
+      await updateDoc(itemRef, {
+        ...updates,
+        updated_at: serverTimestamp(),
+      })
 
       // Update local state
       const index = items.value.findIndex((item) => item.id === id)
       if (index !== -1) {
-        items.value[index] = { ...items.value[index], ...updates } as ItemWithSchedules
+        items.value[index] = {
+          ...items.value[index],
+          ...updates,
+          updated_at: new Date().toISOString(),
+        }
       }
 
       return true
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to update item'
       console.error('Error updating item:', e)
+      return false
+    }
+  }
+
+  async function updateItemSchedules(
+    id: string,
+    schedules: Array<{ time_slot: string; scheduled_time: string }>,
+  ): Promise<boolean> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return false
+    }
+
+    try {
+      const itemRef = doc(db, COLLECTIONS.ITEMS, id)
+      await updateDoc(itemRef, {
+        schedules,
+        updated_at: serverTimestamp(),
+      })
+
+      // Update local state
+      const index = items.value.findIndex((item) => item.id === id)
+      if (index !== -1) {
+        items.value[index] = {
+          ...items.value[index],
+          schedules: schedules.map((s, idx) => ({
+            id: `${id}-schedule-${idx}`,
+            item_id: id,
+            time_slot: s.time_slot,
+            scheduled_time: s.scheduled_time,
+            created_at: new Date().toISOString(),
+          })),
+          updated_at: new Date().toISOString(),
+        }
+      }
+
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to update schedules'
+      console.error('Error updating schedules:', e)
       return false
     }
   }
@@ -175,6 +292,7 @@ export const useItemsStore = defineStore('items', () => {
     getItemsByConflictGroup,
     createItem,
     updateItem,
+    updateItemSchedules,
     deactivateItem,
     reactivateItem,
     $reset,

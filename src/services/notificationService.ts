@@ -1,3 +1,5 @@
+import { getToken, onMessage, type MessagePayload } from 'firebase/messaging'
+import { messaging } from '@/lib/firebase'
 import type { DailyInstanceWithItem } from '@/types'
 
 interface ScheduledNotification {
@@ -8,10 +10,12 @@ interface ScheduledNotification {
 /**
  * Notification Service
  * Schedules and manages push notifications for medication reminders
+ * Integrates with Firebase Cloud Messaging for background notifications
  */
 class NotificationService {
   private scheduledNotifications: Map<string, ScheduledNotification> = new Map()
   private permissionGranted = false
+  private fcmToken: string | null = null
 
   /**
    * Check if notifications are supported in this browser
@@ -26,6 +30,13 @@ class NotificationService {
   get permissionStatus(): NotificationPermission {
     if (!this.isSupported) return 'denied'
     return Notification.permission
+  }
+
+  /**
+   * Get the current FCM token
+   */
+  get token(): string | null {
+    return this.fcmToken
   }
 
   /**
@@ -53,6 +64,92 @@ class NotificationService {
     } catch (error) {
       console.error('Error requesting notification permission:', error)
       return false
+    }
+  }
+
+  /**
+   * Initialize FCM and get token
+   * Call this after permission is granted
+   */
+  async initializeFCM(): Promise<string | null> {
+    if (!messaging) {
+      console.warn('Firebase Messaging not available')
+      return null
+    }
+
+    if (Notification.permission !== 'granted') {
+      console.warn('Notification permission not granted')
+      return null
+    }
+
+    try {
+      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
+      if (!vapidKey) {
+        console.warn('VAPID key not configured')
+        return null
+      }
+
+      // Get FCM token
+      const token = await getToken(messaging, { vapidKey })
+      this.fcmToken = token
+      console.log('FCM token obtained')
+
+      // Set up foreground message handler
+      onMessage(messaging, (payload: MessagePayload) => {
+        console.log('Foreground message received:', payload)
+        this.handleForegroundMessage(payload)
+      })
+
+      return token
+    } catch (error) {
+      console.error('Error initializing FCM:', error)
+      return null
+    }
+  }
+
+  /**
+   * Handle messages received while app is in foreground
+   */
+  private handleForegroundMessage(payload: MessagePayload): void {
+    const { notification } = payload
+    if (notification) {
+      // Show notification using service worker
+      this.showCustomNotification(
+        notification.title || 'Yuki Reminder',
+        notification.body || '',
+        payload.data,
+      )
+    }
+  }
+
+  /**
+   * Show a custom notification
+   */
+  async showCustomNotification(
+    title: string,
+    body: string,
+    data?: Record<string, string>,
+  ): Promise<void> {
+    if (!this.permissionGranted && !(await this.requestPermission())) {
+      return
+    }
+
+    try {
+      const registration = await navigator.serviceWorker.ready
+      await registration.showNotification(title, {
+        body,
+        icon: '/icons/icon-192x192.png',
+        badge: '/icons/badge-72x72.png',
+        data,
+        requireInteraction: true,
+        vibrate: [200, 100, 200],
+      })
+    } catch (error) {
+      // Fallback to basic Notification API
+      new Notification(title, {
+        body,
+        icon: '/icons/icon-192x192.png',
+      })
     }
   }
 

@@ -22,7 +22,7 @@
   "dependencies": {
     "@fontsource-variable/outfit": "^5.2.8",
     "@fontsource-variable/plus-jakarta-sans": "^5.2.8",
-    "@supabase/supabase-js": "^2.90.1",
+    "firebase": "^12.8.0",
     "idb-keyval": "^6.2.2",
     "lucide-vue-next": "^0.562.0",
     "pinia": "^3.0.4",

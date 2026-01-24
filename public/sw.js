@@ -45,9 +45,10 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return
 
   // Skip API calls - always go to network
-  if (url.hostname.includes('supabase')) return
+  if (url.hostname.includes('firebaseio.com')) return
+  if (url.hostname.includes('googleapis.com')) return
+  if (url.hostname.includes('firebase')) return
   if (url.pathname.startsWith('/api')) return
-  if (url.port === '3000' || url.port === '54321') return
 
   // For navigation requests, try network first
   if (request.mode === 'navigate') {

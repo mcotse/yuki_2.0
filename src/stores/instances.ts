@@ -1,5 +1,18 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import {
+  collection,
+  getDocs,
+  doc,
+  addDoc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  type DocumentData,
+} from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { useItemsStore } from './items'
 import { useAuthStore } from './auth'
 import { notificationService } from '@/services/notificationService'
@@ -9,12 +22,9 @@ import type {
   InstancesByStatus,
   SnoozeInterval,
   ConflictCheck,
+  Item,
 } from '@/types'
-import type { Database } from '@/types/database'
-
-type InstanceInsert = Database['public']['Tables']['daily_instances']['Insert']
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+import { COLLECTIONS } from '@/types/database'
 
 // Conflict spacing in minutes (from spec)
 const CONFLICT_SPACING_MINUTES = 5
@@ -30,6 +40,25 @@ export const useInstancesStore = defineStore('instances', () => {
   // Stores
   const itemsStore = useItemsStore()
   const authStore = useAuthStore()
+
+  // Helper to convert Firestore doc to DailyInstance
+  function docToInstance(docData: DocumentData, id: string): DailyInstance {
+    return {
+      id,
+      item_id: docData.item_id || '',
+      schedule_id: docData.schedule_id || null,
+      date: docData.date || '',
+      scheduled_time: docData.scheduled_time || '',
+      status: docData.status || 'pending',
+      confirmed_at: docData.confirmed_at || null,
+      confirmed_by: docData.confirmed_by || null,
+      snooze_until: docData.snooze_until || null,
+      notes: docData.notes || null,
+      is_adhoc: docData.is_adhoc || false,
+      created_at: docData.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+      updated_at: docData.updated_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+    }
+  }
 
   // Getters
   const instancesByStatus = computed<InstancesByStatus>(() => {
@@ -100,20 +129,29 @@ export const useInstancesStore = defineStore('instances', () => {
 
   // Actions
   async function fetchInstancesForDate(date: string): Promise<void> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return
+    }
+
     isLoading.value = true
     error.value = null
     selectedDate.value = date
 
     try {
       // Always fetch items fresh to ensure we have the latest data
-      // This handles cases where new items are added during test runs
       await itemsStore.fetchItems()
 
-      // Fetch instances for the date
-      const response = await fetch(`${API_BASE}/instances?date=${date}`)
-      if (!response.ok) throw new Error('Failed to fetch instances')
+      // Fetch instances for the date from Firestore
+      const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
+      const q = query(
+        instancesRef,
+        where('date', '==', date),
+        orderBy('scheduled_time'),
+      )
+      const snapshot = await getDocs(q)
 
-      const instanceRows = (await response.json()) as DailyInstance[]
+      const instanceRows = snapshot.docs.map((doc) => docToInstance(doc.data(), doc.id))
 
       // Join with items, creating display-friendly items for quick logs
       const joined: DailyInstanceWithItem[] = []
@@ -207,6 +245,11 @@ export const useInstancesStore = defineStore('instances', () => {
     notes?: string,
     overrideConflict = false,
   ): Promise<boolean> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return false
+    }
+
     const instance = instances.value.find((i) => i.id === instanceId)
     if (!instance) {
       error.value = 'Instance not found'
@@ -226,18 +269,14 @@ export const useInstancesStore = defineStore('instances', () => {
       const now = new Date().toISOString()
       const userId = authStore.currentUser?.id ?? null
 
-      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'confirmed',
-          confirmed_at: now,
-          confirmed_by: userId,
-          notes: notes ?? null,
-        }),
+      const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
+      await updateDoc(instanceRef, {
+        status: 'confirmed',
+        confirmed_at: now,
+        confirmed_by: userId,
+        notes: notes ?? null,
+        updated_at: serverTimestamp(),
       })
-
-      if (!response.ok) throw new Error('Failed to confirm instance')
 
       // Cancel any scheduled notification for this instance
       notificationService.cancelNotification(instanceId)
@@ -247,20 +286,11 @@ export const useInstancesStore = defineStore('instances', () => {
       if (index !== -1) {
         const existing = instances.value[index]!
         instances.value[index] = {
-          id: existing.id,
-          item_id: existing.item_id,
-          schedule_id: existing.schedule_id,
-          date: existing.date,
-          scheduled_time: existing.scheduled_time,
+          ...existing,
           status: 'confirmed',
           confirmed_at: now,
           confirmed_by: userId,
-          snooze_until: existing.snooze_until,
           notes: notes ?? null,
-          is_adhoc: existing.is_adhoc,
-          created_at: existing.created_at,
-          updated_at: existing.updated_at,
-          item: existing.item,
         }
       }
 
@@ -273,39 +303,30 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   async function snoozeInstance(instanceId: string, minutes: SnoozeInterval): Promise<boolean> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return false
+    }
+
     try {
       const snoozeUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString()
 
-      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'snoozed',
-          snooze_until: snoozeUntil,
-        }),
+      const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
+      await updateDoc(instanceRef, {
+        status: 'snoozed',
+        snooze_until: snoozeUntil,
+        updated_at: serverTimestamp(),
       })
-
-      if (!response.ok) throw new Error('Failed to snooze instance')
 
       // Update local state
       const index = instances.value.findIndex((i) => i.id === instanceId)
       if (index !== -1) {
         const existing = instances.value[index]!
         const snoozedInstance = {
-          id: existing.id,
-          item_id: existing.item_id,
-          schedule_id: existing.schedule_id,
-          date: existing.date,
+          ...existing,
           scheduled_time: snoozeUntil, // Use snooze time for notification
           status: 'snoozed' as const,
-          confirmed_at: existing.confirmed_at,
-          confirmed_by: existing.confirmed_by,
           snooze_until: snoozeUntil,
-          notes: existing.notes,
-          is_adhoc: existing.is_adhoc,
-          created_at: existing.created_at,
-          updated_at: existing.updated_at,
-          item: existing.item,
         }
         instances.value[index] = snoozedInstance
 
@@ -322,6 +343,11 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   async function undoConfirmation(instanceId: string): Promise<boolean> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return false
+    }
+
     const instance = instances.value.find((i) => i.id === instanceId)
     if (!instance) {
       error.value = 'Instance not found'
@@ -338,38 +364,26 @@ export const useInstancesStore = defineStore('instances', () => {
       const undoNote = `[Undone at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}]`
       const existingNotes = instance.notes ? `${instance.notes} ` : ''
 
-      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'pending',
-          confirmed_at: null,
-          confirmed_by: null,
-          notes: existingNotes + undoNote,
-        }),
+      const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
+      await updateDoc(instanceRef, {
+        status: 'pending',
+        confirmed_at: null,
+        confirmed_by: null,
+        notes: existingNotes + undoNote,
+        updated_at: serverTimestamp(),
       })
-
-      if (!response.ok) throw new Error('Failed to undo confirmation')
 
       // Update local state
       const index = instances.value.findIndex((i) => i.id === instanceId)
       if (index !== -1) {
         const existing = instances.value[index]!
         instances.value[index] = {
-          id: existing.id,
-          item_id: existing.item_id,
-          schedule_id: existing.schedule_id,
-          date: existing.date,
-          scheduled_time: existing.scheduled_time,
+          ...existing,
           status: 'pending',
           confirmed_at: null,
           confirmed_by: null,
           snooze_until: null,
           notes: existingNotes + undoNote,
-          is_adhoc: existing.is_adhoc,
-          created_at: existing.created_at,
-          updated_at: existing.updated_at,
-          item: existing.item,
         }
       }
 
@@ -386,6 +400,11 @@ export const useInstancesStore = defineStore('instances', () => {
     scheduledTime: Date,
     notes?: string,
   ): Promise<DailyInstanceWithItem | null> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return null
+    }
+
     try {
       const item = itemsStore.getItemById(itemId)
       if (!item) {
@@ -393,27 +412,29 @@ export const useInstancesStore = defineStore('instances', () => {
         return null
       }
 
-      const instanceData: InstanceInsert = {
+      const instanceData = {
         item_id: itemId,
+        schedule_id: null,
         date: formatDate(scheduledTime),
         scheduled_time: scheduledTime.toISOString(),
         status: 'pending',
+        confirmed_at: null,
+        confirmed_by: null,
+        snooze_until: null,
         is_adhoc: true,
         notes: notes ?? null,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
       }
 
-      const response = await fetch(`${API_BASE}/instances`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(instanceData),
-      })
-
-      if (!response.ok) throw new Error('Failed to create instance')
-
-      const newInstance = await response.json()
+      const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
+      const docRef = await addDoc(instancesRef, instanceData)
 
       const fullInstance: DailyInstanceWithItem = {
-        ...newInstance,
+        id: docRef.id,
+        ...instanceData,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         item,
       }
 
@@ -439,6 +460,10 @@ export const useInstancesStore = defineStore('instances', () => {
     category: string
     note?: string
   }): Promise<{ success: boolean; error?: string }> {
+    if (!db) {
+      return { success: false, error: 'Firebase not configured' }
+    }
+
     const now = new Date()
     const userId = authStore.currentUser?.id ?? null
 
@@ -453,28 +478,23 @@ export const useInstancesStore = defineStore('instances', () => {
       // Create a confirmed ad-hoc instance
       const instanceData = {
         item_id: itemId,
+        schedule_id: null,
         date: formatDate(now),
         scheduled_time: now.toISOString(),
         status: 'confirmed',
         confirmed_at: now.toISOString(),
         confirmed_by: userId,
+        snooze_until: null,
         is_adhoc: true,
         notes: input.note
           ? `[${input.category}] ${input.note}`
           : `[${input.category}]`,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
       }
 
-      const response = await fetch(`${API_BASE}/instances`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(instanceData),
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('[Quick Log] API error:', errorText)
-        return { success: false, error: 'Failed to save quick log' }
-      }
+      const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
+      await addDoc(instancesRef, instanceData)
 
       // Refresh instances to show the new entry
       await refreshInstances()
@@ -592,7 +612,7 @@ const QUICK_LOG_CATEGORIES: Record<string, { name: string; type: 'food' | 'suppl
 }
 
 // Create a display-friendly item for quick log entries
-function createQuickLogDisplayItem(notes: string | null, baseItem: import('@/types').Item): import('@/types').Item {
+function createQuickLogDisplayItem(notes: string | null, baseItem: Item): Item {
   // Parse category from notes format: "[category] optional note"
   const categoryMatch = notes?.match(/^\[(\w+)\]/)
   const categoryKey = categoryMatch ? categoryMatch[1].toLowerCase() : 'other'

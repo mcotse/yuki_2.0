@@ -1,10 +1,21 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import {
+  collection,
+  getDocs,
+  doc,
+  updateDoc,
+  query,
+  where,
+  orderBy,
+  serverTimestamp,
+  type DocumentData,
+} from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { useItemsStore } from './items'
 import type { DailyInstanceWithItem, DailyInstance } from '@/types'
 import { formatLocalDate } from '@/utils/date'
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000/api'
+import { COLLECTIONS } from '@/types/database'
 
 export interface HistoryEntry {
   instance: DailyInstanceWithItem
@@ -22,6 +33,25 @@ export const useHistoryStore = defineStore('history', () => {
   // Stores
   const itemsStore = useItemsStore()
 
+  // Helper to convert Firestore doc to DailyInstance
+  function docToInstance(docData: DocumentData, id: string): DailyInstance {
+    return {
+      id,
+      item_id: docData.item_id || '',
+      schedule_id: docData.schedule_id || null,
+      date: docData.date || '',
+      scheduled_time: docData.scheduled_time || '',
+      status: docData.status || 'pending',
+      confirmed_at: docData.confirmed_at || null,
+      confirmed_by: docData.confirmed_by || null,
+      snooze_until: docData.snooze_until || null,
+      notes: docData.notes || null,
+      is_adhoc: docData.is_adhoc || false,
+      created_at: docData.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+      updated_at: docData.updated_at?.toDate?.()?.toISOString() || new Date().toISOString(),
+    }
+  }
+
   // Getters
   const entriesByTime = computed(() => {
     return [...entries.value].sort(
@@ -33,6 +63,11 @@ export const useHistoryStore = defineStore('history', () => {
 
   // Actions
   async function fetchHistoryForDate(date: string): Promise<void> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return
+    }
+
     isLoading.value = true
     error.value = null
     selectedDate.value = date
@@ -41,12 +76,17 @@ export const useHistoryStore = defineStore('history', () => {
       // Always fetch items fresh to ensure we have the latest
       await itemsStore.fetchItems()
 
-      // Fetch instances for the date (filter confirmed ones)
-      const response = await fetch(`${API_BASE}/instances?date=${date}`)
-      if (!response.ok) throw new Error('Failed to fetch instances')
+      // Fetch confirmed instances for the date from Firestore
+      const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
+      const q = query(
+        instancesRef,
+        where('date', '==', date),
+        where('status', '==', 'confirmed'),
+        orderBy('confirmed_at', 'desc'),
+      )
+      const snapshot = await getDocs(q)
 
-      const allInstances = (await response.json()) as DailyInstance[]
-      const instanceRows = allInstances.filter(i => i.status === 'confirmed')
+      const instanceRows = snapshot.docs.map((doc) => docToInstance(doc.data(), doc.id))
 
       // Build history entries
       const historyEntries: HistoryEntry[] = []
@@ -74,14 +114,17 @@ export const useHistoryStore = defineStore('history', () => {
     instanceId: string,
     updates: { confirmed_at?: string; confirmed_by?: string | null; notes?: string | null }
   ): Promise<boolean> {
-    try {
-      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      })
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return false
+    }
 
-      if (!response.ok) throw new Error('Failed to update confirmation')
+    try {
+      const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
+      await updateDoc(instanceRef, {
+        ...updates,
+        updated_at: serverTimestamp(),
+      })
 
       // Refresh the list
       await fetchHistoryForDate(selectedDate.value)
@@ -94,6 +137,11 @@ export const useHistoryStore = defineStore('history', () => {
   }
 
   async function undoConfirmation(instanceId: string): Promise<boolean> {
+    if (!db) {
+      error.value = 'Firebase not configured'
+      return false
+    }
+
     const entry = entries.value.find((e) => e.instance.id === instanceId)
     if (!entry) {
       error.value = 'Entry not found'
@@ -105,18 +153,14 @@ export const useHistoryStore = defineStore('history', () => {
       const undoNote = `[Undone at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}]`
       const existingNotes = entry.instance.notes ? `${entry.instance.notes} ` : ''
 
-      const response = await fetch(`${API_BASE}/instances/${instanceId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          status: 'pending',
-          confirmed_at: null,
-          confirmed_by: null,
-          notes: existingNotes + undoNote,
-        }),
+      const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
+      await updateDoc(instanceRef, {
+        status: 'pending',
+        confirmed_at: null,
+        confirmed_by: null,
+        notes: existingNotes + undoNote,
+        updated_at: serverTimestamp(),
       })
-
-      if (!response.ok) throw new Error('Failed to undo confirmation')
 
       // Remove from local state (it's no longer confirmed)
       entries.value = entries.value.filter((e) => e.instance.id !== instanceId)

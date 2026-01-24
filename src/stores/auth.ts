@@ -1,29 +1,22 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import {
+  signInWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+  type User as FirebaseUser,
+} from 'firebase/auth'
+import { doc, getDoc } from 'firebase/firestore'
+import { auth, db } from '@/lib/firebase'
 import { localStorageWrapper } from '@/utils/storage'
 import type { AuthUser } from '@/types'
+import { COLLECTIONS } from '@/types/database'
 
-const SESSION_DURATION_DAYS = 7
 const SESSION_KEY = 'yuki-auth-session'
 
 interface SessionData {
   user: AuthUser
-  expiresAt: string
   lastActivity: string
-}
-
-/**
- * Simple user credentials mapping
- * In production, this would be validated against Supabase
- */
-const USER_CREDENTIALS: Record<string, AuthUser> = {
-  yuki2026: {
-    id: 'matthew-uuid',
-    username: 'matthew',
-    displayName: 'Matthew',
-    role: 'admin',
-  },
-  // Add more users as needed
 }
 
 export const useAuthStore = defineStore(
@@ -31,50 +24,86 @@ export const useAuthStore = defineStore(
   () => {
     // State
     const user = ref<AuthUser | null>(null)
-    const sessionExpiresAt = ref<Date | null>(null)
     const isInitialized = ref(false)
+    const isLoading = ref(false)
 
     // Getters
     const isAuthenticated = computed(() => !!user.value)
     const isAdmin = computed(() => user.value?.role === 'admin')
     const currentUser = computed(() => user.value)
+    const sessionExpiresAt = computed(() => null) // Firebase manages session expiry
 
     // Actions
 
     /**
-     * Initialize auth state from stored session
-     * Also sets up cross-tab logout sync
+     * Fetch user profile from Firestore
+     */
+    async function fetchUserProfile(firebaseUser: FirebaseUser): Promise<AuthUser | null> {
+      if (!db) return null
+
+      try {
+        const userDoc = await getDoc(doc(db, COLLECTIONS.USERS, firebaseUser.uid))
+        if (userDoc.exists()) {
+          const data = userDoc.data()
+          return {
+            id: firebaseUser.uid,
+            username: data.username || firebaseUser.email?.split('@')[0] || 'user',
+            displayName: data.display_name || firebaseUser.displayName || 'User',
+            role: data.role || 'user',
+          }
+        }
+        // User doc doesn't exist, create minimal profile
+        return {
+          id: firebaseUser.uid,
+          username: firebaseUser.email?.split('@')[0] || 'user',
+          displayName: firebaseUser.displayName || 'User',
+          role: 'user',
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error)
+        return null
+      }
+    }
+
+    /**
+     * Initialize auth state from Firebase
+     * Sets up auth state listener for persistence
      */
     function initialize() {
       if (isInitialized.value) return
 
+      // Try to restore from local storage first (for offline support)
       const stored = localStorageWrapper.getItem(SESSION_KEY)
       if (stored) {
         try {
           const session: SessionData = JSON.parse(stored)
-          const expiresAt = new Date(session.expiresAt)
+          user.value = session.user
+        } catch {
+          // Invalid stored session
+        }
+      }
 
-          if (expiresAt > new Date()) {
-            // Session still valid
-            user.value = session.user
-            sessionExpiresAt.value = expiresAt
-            // Refresh activity timestamp
-            refreshSession()
+      // Set up Firebase auth state listener
+      if (auth) {
+        onAuthStateChanged(auth, async (firebaseUser) => {
+          if (firebaseUser) {
+            // User is signed in
+            const profile = await fetchUserProfile(firebaseUser)
+            if (profile) {
+              user.value = profile
+              persistSession()
+            }
           } else {
-            // Session expired
+            // User is signed out
             clearSession()
           }
-        } catch {
-          clearSession()
-        }
+        })
       }
 
       // Listen for storage events to sync logout across tabs
       window.addEventListener('storage', (event) => {
         if (event.key === SESSION_KEY && event.newValue === null) {
-          // Session was cleared in another tab
           user.value = null
-          sessionExpiresAt.value = null
         }
       })
 
@@ -83,48 +112,63 @@ export const useAuthStore = defineStore(
 
     /**
      * Login with password
-     * Password maps directly to user identity
+     * Password maps to email: {password}@yuki.app
      */
-    function login(password: string): { success: boolean; error?: string } {
-      const credentials = USER_CREDENTIALS[password]
-
-      if (!credentials) {
-        return { success: false, error: 'Invalid password' }
+    async function login(password: string): Promise<{ success: boolean; error?: string }> {
+      if (!auth) {
+        return { success: false, error: 'Firebase not configured' }
       }
 
-      // Set user
-      user.value = credentials
+      isLoading.value = true
 
-      // Set session expiry (7 days from now)
-      const expiresAt = new Date()
-      expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS)
-      sessionExpiresAt.value = expiresAt
+      try {
+        // Map password to email format
+        const email = `${password}@yuki.app`
+        const credential = await signInWithEmailAndPassword(auth, email, password)
 
-      // Persist session
-      persistSession()
+        // Fetch user profile from Firestore
+        const profile = await fetchUserProfile(credential.user)
+        if (profile) {
+          user.value = profile
+          persistSession()
+          return { success: true }
+        }
 
-      return { success: true }
+        return { success: false, error: 'Failed to load user profile' }
+      } catch (error: unknown) {
+        const firebaseError = error as { code?: string }
+        if (firebaseError.code === 'auth/user-not-found' || firebaseError.code === 'auth/wrong-password') {
+          return { success: false, error: 'Invalid password' }
+        }
+        if (firebaseError.code === 'auth/invalid-credential') {
+          return { success: false, error: 'Invalid password' }
+        }
+        console.error('Login error:', error)
+        return { success: false, error: 'Login failed. Please try again.' }
+      } finally {
+        isLoading.value = false
+      }
     }
 
     /**
      * Logout and clear session
      */
-    function logout() {
+    async function logout() {
+      if (auth) {
+        try {
+          await signOut(auth)
+        } catch (error) {
+          console.error('Logout error:', error)
+        }
+      }
       clearSession()
     }
 
     /**
      * Refresh session on activity
-     * Extends expiry if user is active
      */
     function refreshSession() {
       if (!user.value) return
-
-      // Extend session by 7 days from now
-      const expiresAt = new Date()
-      expiresAt.setDate(expiresAt.getDate() + SESSION_DURATION_DAYS)
-      sessionExpiresAt.value = expiresAt
-
       persistSession()
     }
 
@@ -132,19 +176,17 @@ export const useAuthStore = defineStore(
      * Check if session is valid
      */
     function isSessionValid(): boolean {
-      if (!user.value || !sessionExpiresAt.value) return false
-      return sessionExpiresAt.value > new Date()
+      return !!user.value
     }
 
     /**
-     * Persist session to localStorage
+     * Persist session to localStorage (for offline support)
      */
     function persistSession() {
-      if (!user.value || !sessionExpiresAt.value) return
+      if (!user.value) return
 
       const session: SessionData = {
         user: user.value,
-        expiresAt: sessionExpiresAt.value.toISOString(),
         lastActivity: new Date().toISOString(),
       }
 
@@ -156,7 +198,6 @@ export const useAuthStore = defineStore(
      */
     function clearSession() {
       user.value = null
-      sessionExpiresAt.value = null
       localStorage.removeItem(SESSION_KEY)
     }
 
@@ -165,6 +206,7 @@ export const useAuthStore = defineStore(
       user,
       sessionExpiresAt,
       isInitialized,
+      isLoading,
 
       // Getters
       isAuthenticated,

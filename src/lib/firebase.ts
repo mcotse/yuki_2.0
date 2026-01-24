@@ -17,12 +17,15 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 }
 
-// Check if Firebase is configured
-const isConfigured = Boolean(
+// Check if Firebase should be used
+// Requires VITE_USE_FIREBASE=true AND valid config
+const useFirebase = import.meta.env.VITE_USE_FIREBASE === 'true'
+const hasConfig = Boolean(
   firebaseConfig.apiKey &&
     firebaseConfig.authDomain &&
     firebaseConfig.projectId
 )
+const isConfigured = useFirebase && hasConfig
 
 if (!isConfigured) {
   console.warn(

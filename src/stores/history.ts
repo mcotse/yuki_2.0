@@ -12,6 +12,7 @@ import {
   type DocumentData,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { localData } from '@/lib/localData'
 import { useItemsStore } from './items'
 import type { DailyInstanceWithItem, DailyInstance } from '@/types'
 import { formatLocalDate } from '@/utils/date'
@@ -63,11 +64,6 @@ export const useHistoryStore = defineStore('history', () => {
 
   // Actions
   async function fetchHistoryForDate(date: string): Promise<void> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return
-    }
-
     isLoading.value = true
     error.value = null
     selectedDate.value = date
@@ -75,6 +71,27 @@ export const useHistoryStore = defineStore('history', () => {
     try {
       // Always fetch items fresh to ensure we have the latest
       await itemsStore.fetchItems()
+
+      // Use local data if Firebase is not configured
+      if (!db) {
+        const instanceRows = localData.getConfirmedInstancesForDate(date)
+
+        // Build history entries
+        const historyEntries: HistoryEntry[] = []
+        for (const instance of instanceRows) {
+          const item = itemsStore.getItemById(instance.item_id)
+          if (item) {
+            historyEntries.push({
+              instance: { ...instance, item },
+              confirmedAt: new Date(instance.confirmed_at!),
+              confirmedByName: null,
+            })
+          }
+        }
+
+        entries.value = historyEntries
+        return
+      }
 
       // Fetch confirmed instances for the date from Firestore
       const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
@@ -114,12 +131,14 @@ export const useHistoryStore = defineStore('history', () => {
     instanceId: string,
     updates: { confirmed_at?: string; confirmed_by?: string | null; notes?: string | null }
   ): Promise<boolean> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return false
-    }
-
     try {
+      // Use local data if Firebase is not configured
+      if (!db) {
+        localData.updateInstance(selectedDate.value, instanceId, updates)
+        await fetchHistoryForDate(selectedDate.value)
+        return true
+      }
+
       const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
       await updateDoc(instanceRef, {
         ...updates,
@@ -137,11 +156,6 @@ export const useHistoryStore = defineStore('history', () => {
   }
 
   async function undoConfirmation(instanceId: string): Promise<boolean> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return false
-    }
-
     const entry = entries.value.find((e) => e.instance.id === instanceId)
     if (!entry) {
       error.value = 'Entry not found'
@@ -152,6 +166,19 @@ export const useHistoryStore = defineStore('history', () => {
       const now = new Date()
       const undoNote = `[Undone at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}]`
       const existingNotes = entry.instance.notes ? `${entry.instance.notes} ` : ''
+
+      // Use local data if Firebase is not configured
+      if (!db) {
+        localData.updateInstance(selectedDate.value, instanceId, {
+          status: 'pending',
+          confirmed_at: null,
+          confirmed_by: null,
+          notes: existingNotes + undoNote,
+        })
+
+        entries.value = entries.value.filter((e) => e.instance.id !== instanceId)
+        return true
+      }
 
       const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
       await updateDoc(instanceRef, {

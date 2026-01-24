@@ -13,6 +13,7 @@ import {
   type DocumentData,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { localData } from '@/lib/localData'
 import { useItemsStore } from './items'
 import { useAuthStore } from './auth'
 import { notificationService } from '@/services/notificationService'
@@ -129,11 +130,6 @@ export const useInstancesStore = defineStore('instances', () => {
 
   // Actions
   async function fetchInstancesForDate(date: string): Promise<void> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return
-    }
-
     isLoading.value = true
     error.value = null
     selectedDate.value = date
@@ -141,6 +137,29 @@ export const useInstancesStore = defineStore('instances', () => {
     try {
       // Always fetch items fresh to ensure we have the latest data
       await itemsStore.fetchItems()
+
+      // Use local data if Firebase is not configured
+      if (!db) {
+        const instanceRows = localData.getInstancesForDate(date)
+
+        // Join with items
+        const joined: DailyInstanceWithItem[] = []
+        for (const instance of instanceRows) {
+          const item = itemsStore.getItemById(instance.item_id)
+          if (item) {
+            if (instance.is_adhoc && instance.notes?.startsWith('[')) {
+              const displayItem = createQuickLogDisplayItem(instance.notes, item)
+              joined.push({ ...instance, item: displayItem })
+            } else {
+              joined.push({ ...instance, item })
+            }
+          }
+        }
+        instances.value = joined
+        notificationService.scheduleAllNotifications(joined)
+        lastFetched.value = new Date()
+        return
+      }
 
       // Fetch instances for the date from Firestore
       const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
@@ -247,11 +266,6 @@ export const useInstancesStore = defineStore('instances', () => {
     notes?: string,
     overrideConflict = false,
   ): Promise<boolean> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return false
-    }
-
     const instance = instances.value.find((i) => i.id === instanceId)
     if (!instance) {
       error.value = 'Instance not found'
@@ -270,6 +284,32 @@ export const useInstancesStore = defineStore('instances', () => {
     try {
       const now = new Date().toISOString()
       const userId = authStore.currentUser?.id ?? null
+
+      // Use local data if Firebase is not configured
+      if (!db) {
+        localData.updateInstance(selectedDate.value, instanceId, {
+          status: 'confirmed',
+          confirmed_at: now,
+          confirmed_by: userId,
+          notes: notes ?? null,
+        })
+
+        // Update local state
+        const index = instances.value.findIndex((i) => i.id === instanceId)
+        if (index !== -1) {
+          const existing = instances.value[index]!
+          instances.value[index] = {
+            ...existing,
+            status: 'confirmed',
+            confirmed_at: now,
+            confirmed_by: userId,
+            notes: notes ?? null,
+          }
+        }
+
+        notificationService.cancelNotification(instanceId)
+        return true
+      }
 
       const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
       await updateDoc(instanceRef, {
@@ -305,13 +345,30 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   async function snoozeInstance(instanceId: string, minutes: SnoozeInterval): Promise<boolean> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return false
-    }
-
     try {
       const snoozeUntil = new Date(Date.now() + minutes * 60 * 1000).toISOString()
+
+      // Use local data if Firebase is not configured
+      if (!db) {
+        localData.updateInstance(selectedDate.value, instanceId, {
+          status: 'snoozed',
+          snooze_until: snoozeUntil,
+        })
+
+        const index = instances.value.findIndex((i) => i.id === instanceId)
+        if (index !== -1) {
+          const existing = instances.value[index]!
+          const snoozedInstance = {
+            ...existing,
+            scheduled_time: snoozeUntil,
+            status: 'snoozed' as const,
+            snooze_until: snoozeUntil,
+          }
+          instances.value[index] = snoozedInstance
+          notificationService.scheduleNotification(snoozedInstance)
+        }
+        return true
+      }
 
       const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
       await updateDoc(instanceRef, {
@@ -345,11 +402,6 @@ export const useInstancesStore = defineStore('instances', () => {
   }
 
   async function undoConfirmation(instanceId: string): Promise<boolean> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return false
-    }
-
     const instance = instances.value.find((i) => i.id === instanceId)
     if (!instance) {
       error.value = 'Instance not found'
@@ -365,6 +417,30 @@ export const useInstancesStore = defineStore('instances', () => {
       const now = new Date()
       const undoNote = `[Undone at ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}]`
       const existingNotes = instance.notes ? `${instance.notes} ` : ''
+
+      // Use local data if Firebase is not configured
+      if (!db) {
+        localData.updateInstance(selectedDate.value, instanceId, {
+          status: 'pending',
+          confirmed_at: null,
+          confirmed_by: null,
+          notes: existingNotes + undoNote,
+        })
+
+        const index = instances.value.findIndex((i) => i.id === instanceId)
+        if (index !== -1) {
+          const existing = instances.value[index]!
+          instances.value[index] = {
+            ...existing,
+            status: 'pending',
+            confirmed_at: null,
+            confirmed_by: null,
+            snooze_until: null,
+            notes: existingNotes + undoNote,
+          }
+        }
+        return true
+      }
 
       const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
       await updateDoc(instanceRef, {
@@ -402,11 +478,6 @@ export const useInstancesStore = defineStore('instances', () => {
     scheduledTime: Date,
     notes?: string,
   ): Promise<DailyInstanceWithItem | null> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return null
-    }
-
     try {
       const item = itemsStore.getItemById(itemId)
       if (!item) {
@@ -425,12 +496,25 @@ export const useInstancesStore = defineStore('instances', () => {
         snooze_until: null,
         is_adhoc: true,
         notes: notes ?? null,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
+      }
+
+      // Use local data if Firebase is not configured
+      if (!db) {
+        const newInstance = localData.createInstance(instanceData)
+        const fullInstance: DailyInstanceWithItem = { ...newInstance, item }
+
+        if (formatDate(scheduledTime) === selectedDate.value) {
+          instances.value.push(fullInstance)
+        }
+        return fullInstance
       }
 
       const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
-      const docRef = await addDoc(instancesRef, instanceData)
+      const docRef = await addDoc(instancesRef, {
+        ...instanceData,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      })
 
       const fullInstance: DailyInstanceWithItem = {
         id: docRef.id,
@@ -462,10 +546,6 @@ export const useInstancesStore = defineStore('instances', () => {
     category: string
     note?: string
   }): Promise<{ success: boolean; error?: string }> {
-    if (!db) {
-      return { success: false, error: 'Firebase not configured' }
-    }
-
     const now = new Date()
     const userId = authStore.currentUser?.id ?? null
 
@@ -477,13 +557,12 @@ export const useInstancesStore = defineStore('instances', () => {
         return { success: false, error: 'Could not create quick log item' }
       }
 
-      // Create a confirmed ad-hoc instance
       const instanceData = {
         item_id: itemId,
         schedule_id: null,
         date: formatDate(now),
         scheduled_time: now.toISOString(),
-        status: 'confirmed',
+        status: 'confirmed' as const,
         confirmed_at: now.toISOString(),
         confirmed_by: userId,
         snooze_until: null,
@@ -491,12 +570,21 @@ export const useInstancesStore = defineStore('instances', () => {
         notes: input.note
           ? `[${input.category}] ${input.note}`
           : `[${input.category}]`,
-        created_at: serverTimestamp(),
-        updated_at: serverTimestamp(),
+      }
+
+      // Use local data if Firebase is not configured
+      if (!db) {
+        localData.createInstance(instanceData)
+        await refreshInstances()
+        return { success: true }
       }
 
       const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
-      await addDoc(instancesRef, instanceData)
+      await addDoc(instancesRef, {
+        ...instanceData,
+        created_at: serverTimestamp(),
+        updated_at: serverTimestamp(),
+      })
 
       // Refresh instances to show the new entry
       await refreshInstances()

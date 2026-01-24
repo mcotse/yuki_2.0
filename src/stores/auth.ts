@@ -14,6 +14,22 @@ import { COLLECTIONS } from '@/types/database'
 
 const SESSION_KEY = 'yuki-auth-session'
 
+// Local users for development/testing when Firebase is not configured
+const LOCAL_USERS: Record<string, AuthUser> = {
+  yuki2026: {
+    id: 'local-admin-uuid',
+    username: 'matthew',
+    displayName: 'Matthew',
+    role: 'admin',
+  },
+  caretaker: {
+    id: 'local-user-uuid',
+    username: 'caretaker',
+    displayName: 'Caretaker',
+    role: 'user',
+  },
+}
+
 interface SessionData {
   user: AuthUser
   lastActivity: string
@@ -112,17 +128,24 @@ export const useAuthStore = defineStore(
 
     /**
      * Login with password
-     * Password maps to email: {password}@yuki.app
+     * Uses local auth for development, Firebase for production
      */
     async function login(password: string): Promise<{ success: boolean; error?: string }> {
-      if (!auth) {
-        return { success: false, error: 'Firebase not configured' }
-      }
-
       isLoading.value = true
 
       try {
-        // Map password to email format
+        // If Firebase is not configured, use local authentication
+        if (!auth) {
+          const localUser = LOCAL_USERS[password]
+          if (localUser) {
+            user.value = localUser
+            persistSession()
+            return { success: true }
+          }
+          return { success: false, error: 'Invalid password' }
+        }
+
+        // Firebase authentication
         const email = `${password}@yuki.app`
         const credential = await signInWithEmailAndPassword(auth, email, password)
 

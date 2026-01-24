@@ -12,6 +12,7 @@ import {
   type DocumentData,
 } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
+import { localData } from '@/lib/localData'
 import type { Item, ItemSchedule, ItemWithSchedules, ItemCategory, ItemType, ItemInput } from '@/types'
 import { COLLECTIONS } from '@/types/database'
 
@@ -94,15 +95,17 @@ export const useItemsStore = defineStore('items', () => {
 
   // Actions
   async function fetchItems(): Promise<void> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return
-    }
-
     isLoading.value = true
     error.value = null
 
     try {
+      // Use local data if Firebase is not configured
+      if (!db) {
+        items.value = localData.getItems()
+        lastFetched.value = new Date()
+        return
+      }
+
       const itemsRef = collection(db, COLLECTIONS.ITEMS)
       const q = query(itemsRef, orderBy('name'))
       const snapshot = await getDocs(q)
@@ -129,12 +132,34 @@ export const useItemsStore = defineStore('items', () => {
     itemData: Partial<ItemInput>,
     schedules?: Array<{ time_slot: string; scheduled_time: string }>,
   ): Promise<ItemWithSchedules | null> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return null
-    }
-
     try {
+      // Use local data if Firebase is not configured
+      if (!db) {
+        const newItem = localData.createItem({
+          pet_id: itemData.pet_id || null,
+          type: itemData.type || 'medication',
+          category: itemData.category || null,
+          name: itemData.name || '',
+          dose: itemData.dose || null,
+          location: itemData.location || null,
+          notes: itemData.notes || null,
+          frequency: itemData.frequency || '1x_daily',
+          active: itemData.active !== false,
+          start_date: itemData.start_date || null,
+          end_date: itemData.end_date || null,
+          conflict_group: itemData.conflict_group || null,
+          schedules: (schedules || []).map((s, idx) => ({
+            id: `new-schedule-${idx}`,
+            item_id: '',
+            time_slot: s.time_slot,
+            scheduled_time: s.scheduled_time,
+            created_at: new Date().toISOString(),
+          })),
+        })
+        items.value.push(newItem)
+        return newItem
+      }
+
       const itemsRef = collection(db, COLLECTIONS.ITEMS)
 
       const newItemData = {
@@ -182,12 +207,27 @@ export const useItemsStore = defineStore('items', () => {
   }
 
   async function updateItem(id: string, updates: Partial<Item>): Promise<boolean> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return false
-    }
-
     try {
+      // Use local data if Firebase is not configured
+      if (!db) {
+        const updated = localData.updateItem(id, updates)
+        if (updated) {
+          const index = items.value.findIndex((item) => item.id === id)
+          const existingItem = items.value[index]
+          if (index !== -1 && existingItem) {
+            items.value[index] = {
+              ...existingItem,
+              ...updates,
+              id: existingItem.id,
+              schedules: existingItem.schedules,
+              updated_at: new Date().toISOString(),
+            }
+          }
+          return true
+        }
+        return false
+      }
+
       const itemRef = doc(db, COLLECTIONS.ITEMS, id)
       await updateDoc(itemRef, {
         ...updates,
@@ -219,12 +259,30 @@ export const useItemsStore = defineStore('items', () => {
     id: string,
     schedules: Array<{ time_slot: string; scheduled_time: string }>,
   ): Promise<boolean> {
-    if (!db) {
-      error.value = 'Firebase not configured'
-      return false
-    }
-
     try {
+      // Use local data if Firebase is not configured
+      if (!db) {
+        const newSchedules = schedules.map((s, idx) => ({
+          id: `${id}-schedule-${idx}`,
+          item_id: id,
+          time_slot: s.time_slot,
+          scheduled_time: s.scheduled_time,
+          created_at: new Date().toISOString(),
+        }))
+        localData.updateItem(id, { schedules: newSchedules })
+
+        const index = items.value.findIndex((item) => item.id === id)
+        const existingItem = items.value[index]
+        if (index !== -1 && existingItem) {
+          items.value[index] = {
+            ...existingItem,
+            schedules: newSchedules,
+            updated_at: new Date().toISOString(),
+          }
+        }
+        return true
+      }
+
       const itemRef = doc(db, COLLECTIONS.ITEMS, id)
       await updateDoc(itemRef, {
         schedules,

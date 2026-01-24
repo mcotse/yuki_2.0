@@ -23,6 +23,12 @@ const router = createRouter({
       meta: { title: 'Settings', icon: 'settings', requiresAuth: true },
     },
     {
+      path: '/medications',
+      name: 'medications',
+      component: () => import('@/views/MedicationsView.vue'),
+      meta: { title: 'Manage Medications', requiresAuth: true, requiresAdmin: true },
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),

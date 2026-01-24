@@ -2,6 +2,7 @@ import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useItemsStore } from './items'
 import { useAuthStore } from './auth'
+import { notificationService } from '@/services/notificationService'
 import type {
   DailyInstance,
   DailyInstanceWithItem,
@@ -130,6 +131,9 @@ export const useInstancesStore = defineStore('instances', () => {
       }
       instances.value = joined
 
+      // Schedule notifications for pending instances
+      notificationService.scheduleAllNotifications(joined)
+
       lastFetched.value = new Date()
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch instances'
@@ -235,6 +239,9 @@ export const useInstancesStore = defineStore('instances', () => {
 
       if (!response.ok) throw new Error('Failed to confirm instance')
 
+      // Cancel any scheduled notification for this instance
+      notificationService.cancelNotification(instanceId)
+
       // Update local state
       const index = instances.value.findIndex((i) => i.id === instanceId)
       if (index !== -1) {
@@ -284,13 +291,13 @@ export const useInstancesStore = defineStore('instances', () => {
       const index = instances.value.findIndex((i) => i.id === instanceId)
       if (index !== -1) {
         const existing = instances.value[index]!
-        instances.value[index] = {
+        const snoozedInstance = {
           id: existing.id,
           item_id: existing.item_id,
           schedule_id: existing.schedule_id,
           date: existing.date,
-          scheduled_time: existing.scheduled_time,
-          status: 'snoozed',
+          scheduled_time: snoozeUntil, // Use snooze time for notification
+          status: 'snoozed' as const,
           confirmed_at: existing.confirmed_at,
           confirmed_by: existing.confirmed_by,
           snooze_until: snoozeUntil,
@@ -300,6 +307,10 @@ export const useInstancesStore = defineStore('instances', () => {
           updated_at: existing.updated_at,
           item: existing.item,
         }
+        instances.value[index] = snoozedInstance
+
+        // Reschedule notification to the snooze time
+        notificationService.scheduleNotification(snoozedInstance)
       }
 
       return true

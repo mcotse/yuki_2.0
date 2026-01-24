@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import BottomTabBar from './BottomTabBar.vue'
+import { useBadge } from '@/composables/useBadge'
 
 const route = useRoute()
+const { initBadgeWatch } = useBadge()
 
 // Hide tab bar on login page
 const showTabBar = computed(() => route.name !== 'login')
+
+// Initialize badge updates when layout mounts (user authenticated)
+onMounted(() => {
+  initBadgeWatch()
+})
 </script>
 
 <template>

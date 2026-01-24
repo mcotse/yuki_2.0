@@ -43,6 +43,7 @@ export const useAuthStore = defineStore(
 
     /**
      * Initialize auth state from stored session
+     * Also sets up cross-tab logout sync
      */
     function initialize() {
       if (isInitialized.value) return
@@ -67,6 +68,15 @@ export const useAuthStore = defineStore(
           clearSession()
         }
       }
+
+      // Listen for storage events to sync logout across tabs
+      window.addEventListener('storage', (event) => {
+        if (event.key === SESSION_KEY && event.newValue === null) {
+          // Session was cleared in another tab
+          user.value = null
+          sessionExpiresAt.value = null
+        }
+      })
 
       isInitialized.value = true
     }

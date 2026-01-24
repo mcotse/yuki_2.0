@@ -256,6 +256,7 @@ describe('instances store', () => {
 
       const result = store.checkConflict(instanceWithoutGroup)
       expect(result.hasConflict).toBe(false)
+      expect(result.canOverride).toBe(true)
     })
 
     it('returns no conflict when no recent confirmations in group', () => {
@@ -291,6 +292,198 @@ describe('instances store', () => {
       expect(result.hasConflict).toBe(true)
       expect(result.conflictingItemName).toBe('Eye Drops B')
       expect(result.remainingSeconds).toBeGreaterThan(0)
+    })
+
+    it('returns no conflict when 5 minutes have passed', () => {
+      const store = useInstancesStore()
+      // Set current time to 10:00
+      vi.setSystemTime(new Date('2024-01-15T10:00:00Z'))
+
+      const confirmedInstance = createMockInstance({
+        id: 'inst-confirmed',
+        item_id: 'item-2',
+        status: 'confirmed',
+        confirmed_at: '2024-01-15T09:54:59Z', // 5 minutes and 1 second ago
+        item: {
+          ...mockItem,
+          id: 'item-2',
+          name: 'Eye Drops B',
+        },
+      })
+
+      const pendingInstance = createMockInstance({
+        id: 'inst-pending',
+        status: 'pending',
+      })
+
+      store.instances = [confirmedInstance, pendingInstance]
+
+      const result = store.checkConflict(pendingInstance)
+      expect(result.hasConflict).toBe(false)
+    })
+
+    it('returns conflict at exactly 4 minutes 59 seconds', () => {
+      const store = useInstancesStore()
+      vi.setSystemTime(new Date('2024-01-15T10:00:00Z'))
+
+      const confirmedInstance = createMockInstance({
+        id: 'inst-confirmed',
+        item_id: 'item-2',
+        status: 'confirmed',
+        confirmed_at: '2024-01-15T09:55:01Z', // 4 minutes 59 seconds ago
+        item: {
+          ...mockItem,
+          id: 'item-2',
+          name: 'Eye Drops B',
+        },
+      })
+
+      const pendingInstance = createMockInstance({
+        id: 'inst-pending',
+        status: 'pending',
+      })
+
+      store.instances = [confirmedInstance, pendingInstance]
+
+      const result = store.checkConflict(pendingInstance)
+      expect(result.hasConflict).toBe(true)
+      expect(result.remainingSeconds).toBe(1)
+    })
+
+    it('calculates remaining seconds correctly at 3 minutes elapsed', () => {
+      const store = useInstancesStore()
+      vi.setSystemTime(new Date('2024-01-15T10:00:00Z'))
+
+      const confirmedInstance = createMockInstance({
+        id: 'inst-confirmed',
+        item_id: 'item-2',
+        status: 'confirmed',
+        confirmed_at: '2024-01-15T09:57:00Z', // 3 minutes ago
+        item: {
+          ...mockItem,
+          id: 'item-2',
+          name: 'Eye Drops B',
+        },
+      })
+
+      const pendingInstance = createMockInstance({
+        id: 'inst-pending',
+        status: 'pending',
+      })
+
+      store.instances = [confirmedInstance, pendingInstance]
+
+      const result = store.checkConflict(pendingInstance)
+      expect(result.hasConflict).toBe(true)
+      expect(result.remainingSeconds).toBe(120) // 2 minutes = 120 seconds
+    })
+
+    it('allows override even when conflict exists', () => {
+      const store = useInstancesStore()
+      const confirmedInstance = createMockInstance({
+        id: 'inst-confirmed',
+        item_id: 'item-2',
+        status: 'confirmed',
+        confirmed_at: new Date().toISOString(),
+        item: {
+          ...mockItem,
+          id: 'item-2',
+          name: 'Eye Drops B',
+        },
+      })
+
+      const pendingInstance = createMockInstance({
+        id: 'inst-pending',
+        status: 'pending',
+      })
+
+      store.instances = [confirmedInstance, pendingInstance]
+
+      const result = store.checkConflict(pendingInstance)
+      expect(result.hasConflict).toBe(true)
+      expect(result.canOverride).toBe(true) // Override always allowed
+    })
+
+    it('does not consider items in different conflict groups', () => {
+      const store = useInstancesStore()
+      const confirmedInstance = createMockInstance({
+        id: 'inst-confirmed',
+        item_id: 'item-2',
+        status: 'confirmed',
+        confirmed_at: new Date().toISOString(),
+        item: {
+          ...mockItem,
+          id: 'item-2',
+          name: 'Oral Med',
+          conflict_group: 'oral_meds', // Different group
+        },
+      })
+
+      const pendingInstance = createMockInstance({
+        id: 'inst-pending',
+        status: 'pending',
+        // eye_drops group (from mockItem)
+      })
+
+      store.instances = [confirmedInstance, pendingInstance]
+
+      const result = store.checkConflict(pendingInstance)
+      expect(result.hasConflict).toBe(false)
+    })
+
+    it('finds most recent confirmation when multiple exist', () => {
+      const store = useInstancesStore()
+      vi.setSystemTime(new Date('2024-01-15T10:00:00Z'))
+
+      const olderConfirmed = createMockInstance({
+        id: 'inst-older',
+        item_id: 'item-2',
+        status: 'confirmed',
+        confirmed_at: '2024-01-15T09:56:00Z', // 4 minutes ago
+        item: {
+          ...mockItem,
+          id: 'item-2',
+          name: 'Eye Drops B',
+        },
+      })
+
+      const newerConfirmed = createMockInstance({
+        id: 'inst-newer',
+        item_id: 'item-2',
+        status: 'confirmed',
+        confirmed_at: '2024-01-15T09:58:00Z', // 2 minutes ago
+        item: {
+          ...mockItem,
+          id: 'item-2',
+          name: 'Eye Drops C',
+        },
+      })
+
+      const pendingInstance = createMockInstance({
+        id: 'inst-pending',
+        status: 'pending',
+      })
+
+      store.instances = [olderConfirmed, newerConfirmed, pendingInstance]
+
+      const result = store.checkConflict(pendingInstance)
+      expect(result.hasConflict).toBe(true)
+      expect(result.conflictingItemName).toBe('Eye Drops C') // Most recent
+      expect(result.remainingSeconds).toBe(180) // 3 minutes left
+    })
+
+    it('does not consider self as conflicting', () => {
+      const store = useInstancesStore()
+      const instance = createMockInstance({
+        id: 'inst-1',
+        status: 'confirmed',
+        confirmed_at: new Date().toISOString(),
+      })
+
+      store.instances = [instance]
+
+      const result = store.checkConflict(instance)
+      expect(result.hasConflict).toBe(false)
     })
   })
 

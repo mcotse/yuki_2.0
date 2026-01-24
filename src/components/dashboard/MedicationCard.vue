@@ -1,19 +1,17 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import type { DailyInstanceWithItem, SnoozeInterval } from '@/types'
 import { formatTime, getRelativeTime } from '@/utils/date'
 import { useInstancesStore } from '@/stores/instances'
 import {
-  Droplet,
+  Eye,
   Pill,
   Utensils,
-  Leaf,
   Check,
   Clock,
   AlertTriangle,
   ChevronDown,
   ChevronUp,
-  Undo2,
 } from 'lucide-vue-next'
 
 const props = defineProps<{
@@ -22,31 +20,78 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  confirm: [overrideConflict: boolean]
+  confirm: []
   snooze: [minutes: SnoozeInterval]
-  undo: []
 }>()
 
 const instancesStore = useInstancesStore()
 const isExpanded = ref(false)
 const isConfirming = ref(false)
-const isUndoing = ref(false)
 const showSnoozeOptions = ref(false)
 
-// Reactive time ticker to refresh conflict checks every minute
-const tick = ref(0)
-let tickInterval: ReturnType<typeof setInterval> | null = null
+// Live countdown timer for conflict warning
+const countdownSeconds = ref(0)
+let countdownInterval: ReturnType<typeof setInterval> | null = null
+
+function updateCountdown() {
+  const conflictCheck = instancesStore.checkConflict(props.instance)
+  if (conflictCheck.hasConflict && conflictCheck.remainingSeconds) {
+    countdownSeconds.value = conflictCheck.remainingSeconds
+  } else {
+    countdownSeconds.value = 0
+    stopCountdown()
+  }
+}
+
+function startCountdown() {
+  if (countdownInterval) return
+  countdownInterval = setInterval(() => {
+    if (countdownSeconds.value > 0) {
+      countdownSeconds.value--
+    }
+    if (countdownSeconds.value <= 0) {
+      stopCountdown()
+    }
+  }, 1000)
+}
+
+function stopCountdown() {
+  if (countdownInterval) {
+    clearInterval(countdownInterval)
+    countdownInterval = null
+  }
+}
+
+function formatCountdown(seconds: number): string {
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins}:${String(secs).padStart(2, '0')}`
+}
+
+// Watch for conflict changes
+watch(
+  () => instancesStore.checkConflict(props.instance),
+  (newConflict) => {
+    if (newConflict.hasConflict && newConflict.remainingSeconds) {
+      countdownSeconds.value = newConflict.remainingSeconds
+      startCountdown()
+    } else {
+      countdownSeconds.value = 0
+      stopCountdown()
+    }
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
-  tickInterval = setInterval(() => {
-    tick.value++
-  }, 60000) // Update every minute
+  updateCountdown()
+  if (countdownSeconds.value > 0) {
+    startCountdown()
+  }
 })
 
 onUnmounted(() => {
-  if (tickInterval) {
-    clearInterval(tickInterval)
-  }
+  stopCountdown()
 })
 
 const scheduledTime = computed(() => formatTime(new Date(props.instance.scheduled_time)))
@@ -55,96 +100,59 @@ const confirmedTime = computed(() =>
   props.instance.confirmed_at ? formatTime(new Date(props.instance.confirmed_at)) : null,
 )
 
-const hasNotes = computed(() => !!props.instance.item.notes)
-
-// Check if this instance was previously undone (to prevent undo of undo)
-const wasUndone = computed(() => {
-  return props.instance.notes?.includes('[Undone') ?? false
-})
-
-// Icon based on item type and category
 const icon = computed(() => {
-  const type = props.instance.item.type
   const category = props.instance.item.category
-
-  // Eye drops use droplet icon
-  if (category === 'leftEye' || category === 'rightEye') return Droplet
-  // Supplements use leaf icon
-  if (type === 'supplement') return Leaf
-  // Food items use utensils
-  if (type === 'food' || category === 'food') return Utensils
-  // Default to pill for medications
-  return Pill
+  if (category === 'leftEye' || category === 'rightEye') return Eye
+  if (category === 'oral') return Pill
+  return Utensils
 })
 
-// Background color based on item TYPE (not status) for consistent visual identity
 const iconBgClass = computed(() => {
-  const type = props.instance.item.type
-  const category = props.instance.item.category
-
-  // Eye drops - accent purple/pink gradient feel
-  if (category === 'leftEye') return 'bg-accent/20'
-  if (category === 'rightEye') return 'bg-secondary/20'
-  // Supplements - earthy green
-  if (type === 'supplement') return 'bg-emerald-500/20'
-  // Food - warm orange
-  if (type === 'food' || category === 'food') return 'bg-amber-500/20'
-  // Oral medications - blue
-  if (category === 'oral') return 'bg-blue-500/20'
-  // Default
-  return 'bg-muted/50'
-})
-
-// Icon color matches background theme
-const iconColorClass = computed(() => {
-  const type = props.instance.item.type
-  const category = props.instance.item.category
-
-  if (category === 'leftEye') return 'text-accent'
-  if (category === 'rightEye') return 'text-secondary'
-  if (type === 'supplement') return 'text-emerald-600'
-  if (type === 'food' || category === 'food') return 'text-amber-600'
-  if (category === 'oral') return 'text-blue-600'
-  return 'text-muted-foreground'
-})
-
-// Border/ring indicator for status (subtle)
-const statusRingClass = computed(() => {
   switch (props.status) {
     case 'overdue':
-      return 'ring-2 ring-error/50'
+      return 'bg-error/20'
     case 'due':
-      return 'ring-2 ring-accent/50'
+      return 'bg-accent/20'
+    case 'snoozed':
+      return 'bg-tertiary/20'
+    case 'confirmed':
+      return 'bg-quaternary/20'
     default:
-      return ''
+      return 'bg-muted/50'
   }
 })
 
-// Re-check conflict every minute (tick dependency triggers recalculation)
-const conflict = computed(() => {
-  void tick.value // Dependency to trigger recalculation every minute
-  return instancesStore.checkConflict(props.instance)
+const iconColorClass = computed(() => {
+  switch (props.status) {
+    case 'overdue':
+      return 'text-error'
+    case 'due':
+      return 'bg-accent'
+    case 'snoozed':
+      return 'text-tertiary'
+    case 'confirmed':
+      return 'text-quaternary'
+    default:
+      return 'text-muted-foreground'
+  }
 })
 
-async function handleConfirm(event: Event) {
-  event.stopPropagation() // Prevent card click from triggering
-  if (isConfirming.value) return
+const conflict = computed(() => instancesStore.checkConflict(props.instance))
 
-  // Track whether we're overriding a conflict
-  let overrideConflict = false
+async function handleConfirm() {
+  if (isConfirming.value) return
 
   // Check for conflict
   if (conflict.value.hasConflict) {
     // Show warning but still allow override
     const confirmed = window.confirm(
-      `${conflict.value.conflictingItemName} was just given. Wait ${conflict.value.remainingMinutes} min or confirm anyway?`,
+      `${conflict.value.conflictingItemName} was just given. Wait ${conflict.value.remainingSeconds}s or confirm anyway?`,
     )
     if (!confirmed) return
-    overrideConflict = true
   }
 
   isConfirming.value = true
-  emit('confirm', overrideConflict)
+  emit('confirm')
   // Reset after animation
   setTimeout(() => {
     isConfirming.value = false
@@ -155,29 +163,6 @@ function handleSnooze(minutes: SnoozeInterval) {
   emit('snooze', minutes)
   showSnoozeOptions.value = false
 }
-
-function toggleSnoozeOptions(event: Event) {
-  event.stopPropagation() // Prevent card click from triggering
-  showSnoozeOptions.value = !showSnoozeOptions.value
-}
-
-function handleCardClick() {
-  if (hasNotes.value) {
-    isExpanded.value = !isExpanded.value
-  }
-}
-
-async function handleUndo(event: Event) {
-  event.stopPropagation() // Prevent card click from triggering
-  if (isUndoing.value) return
-
-  isUndoing.value = true
-  emit('undo')
-  // Reset after animation
-  setTimeout(() => {
-    isUndoing.value = false
-  }, 300)
-}
 </script>
 
 <template>
@@ -187,16 +172,14 @@ async function handleUndo(event: Event) {
       'opacity-60': status === 'confirmed',
       'border-error/50 bg-error/5': status === 'overdue',
       'ring-2 ring-accent': status === 'due',
-      'cursor-pointer': hasNotes,
     }"
-    @click="handleCardClick"
   >
     <!-- Main Row -->
     <div class="flex items-center gap-4">
       <!-- Icon -->
       <div
-        class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
-        :class="[iconBgClass, statusRingClass]"
+        class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+        :class="iconBgClass"
       >
         <component :is="icon" class="w-6 h-6" :class="iconColorClass" />
       </div>
@@ -207,14 +190,6 @@ async function handleUndo(event: Event) {
           <h3 class="font-bold text-foreground truncate">{{ instance.item.name }}</h3>
           <span v-if="status === 'confirmed'" class="text-quaternary">
             <Check class="w-4 h-4" />
-          </span>
-          <!-- Notes indicator - subtle inline hint -->
-          <span
-            v-if="hasNotes"
-            class="text-muted-foreground/50 transition-transform duration-200"
-            :class="{ 'rotate-180': isExpanded }"
-          >
-            <ChevronDown class="w-4 h-4" />
           </span>
         </div>
         <div class="flex items-center gap-2 text-sm text-muted-foreground">
@@ -235,7 +210,7 @@ async function handleUndo(event: Event) {
         </div>
       </div>
 
-      <!-- Actions - always right-aligned -->
+      <!-- Actions -->
       <div class="flex items-center gap-2 flex-shrink-0">
         <!-- Confirm Button -->
         <button
@@ -248,42 +223,42 @@ async function handleUndo(event: Event) {
           <Check class="w-4 h-4" />
         </button>
 
-        <!-- Undo Button (for confirmed items that weren't already undone) -->
-        <button
-          v-if="status === 'confirmed' && !wasUndone"
-          class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
-          :class="{ 'animate-pulse': isUndoing }"
-          :disabled="isUndoing"
-          title="Undo confirmation"
-          @click="handleUndo"
-        >
-          <Undo2 class="w-5 h-5 text-muted-foreground" />
-        </button>
-
         <!-- Snooze Button -->
         <button
           v-if="status === 'due' || status === 'overdue'"
           class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
-          @click="toggleSnoozeOptions"
+          @click="showSnoozeOptions = !showSnoozeOptions"
         >
           <Clock class="w-5 h-5 text-muted-foreground" />
+        </button>
+
+        <!-- Expand Button -->
+        <button
+          v-if="instance.item.notes"
+          class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+          @click="isExpanded = !isExpanded"
+        >
+          <component
+            :is="isExpanded ? ChevronUp : ChevronDown"
+            class="w-5 h-5 text-muted-foreground"
+          />
         </button>
       </div>
     </div>
 
-    <!-- Conflict Warning -->
+    <!-- Conflict Warning with Live Countdown -->
     <div
-      v-if="conflict.hasConflict && status !== 'confirmed'"
-      class="mt-3 flex items-center gap-2 text-sm text-tertiary"
+      v-if="countdownSeconds > 0 && status !== 'confirmed'"
+      class="mt-3 flex items-center gap-2 text-sm text-tertiary bg-tertiary/10 rounded-lg p-2"
     >
-      <AlertTriangle class="w-4 h-4" />
-      <span>
-        Wait {{ conflict.remainingMinutes }} min - {{ conflict.conflictingItemName }} was just given
+      <AlertTriangle class="w-4 h-4 flex-shrink-0" />
+      <span class="flex-1">
+        Wait <span class="font-mono font-bold">{{ formatCountdown(countdownSeconds) }}</span> - {{ conflict.conflictingItemName }} was just given
       </span>
     </div>
 
     <!-- Snooze Options -->
-    <div v-if="showSnoozeOptions" class="mt-3 flex items-center gap-2" @click.stop>
+    <div v-if="showSnoozeOptions" class="mt-3 flex items-center gap-2">
       <span class="text-sm text-muted-foreground">Snooze for:</span>
       <button
         class="px-3 py-1 rounded-full text-sm font-medium bg-tertiary/20 text-tertiary hover:bg-tertiary/30 transition-colors"
@@ -306,7 +281,7 @@ async function handleUndo(event: Event) {
     </div>
 
     <!-- Expanded Notes -->
-    <div v-if="isExpanded && hasNotes" class="mt-3 pt-3 border-t border-muted">
+    <div v-if="isExpanded && instance.item.notes" class="mt-3 pt-3 border-t border-muted">
       <p class="text-sm text-muted-foreground">{{ instance.item.notes }}</p>
     </div>
   </div>

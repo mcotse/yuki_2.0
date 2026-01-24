@@ -7,6 +7,7 @@ import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/yuki_2.0/',
   plugins: [
     vue(),
     vueDevTools(),

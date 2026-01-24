@@ -2,6 +2,28 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '../auth'
 
+// Mock Firebase Auth
+vi.mock('firebase/auth', () => ({
+  signInWithEmailAndPassword: vi.fn(),
+  signOut: vi.fn(),
+  onAuthStateChanged: vi.fn(() => {
+    // Return unsubscribe function
+    return () => {}
+  }),
+}))
+
+// Mock Firebase Firestore
+vi.mock('firebase/firestore', () => ({
+  doc: vi.fn(),
+  getDoc: vi.fn(),
+}))
+
+// Mock Firebase instances
+vi.mock('@/lib/firebase', () => ({
+  auth: {},
+  db: {},
+}))
+
 // Mock localStorage
 const localStorageMock = (() => {
   let store: Record<string, string> = {}
@@ -38,15 +60,42 @@ describe('auth store', () => {
   })
 
   describe('login', () => {
-    it('logs in successfully with valid password', async () => {
+    it('logs in successfully with valid credentials', async () => {
+      const { signInWithEmailAndPassword } = await import('firebase/auth')
+      const { getDoc } = await import('firebase/firestore')
+
+      // Mock successful sign in
+      vi.mocked(signInWithEmailAndPassword).mockResolvedValue({
+        user: { uid: 'test-uid', email: 'yuki2026@yuki.app' },
+      } as never)
+
+      // Mock user profile fetch
+      vi.mocked(getDoc).mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          username: 'matthew',
+          display_name: 'Matthew',
+          role: 'admin',
+        }),
+      } as never)
+
       const store = useAuthStore()
       const result = await store.login('yuki2026')
 
       expect(result.success).toBe(true)
-      // Note: Full auth flow requires Firebase, so we check the result
+      expect(store.isAuthenticated).toBe(true)
+      expect(store.user?.username).toBe('matthew')
+      expect(store.user?.role).toBe('admin')
     })
 
-    it('fails with invalid password', async () => {
+    it('fails with invalid credentials', async () => {
+      const { signInWithEmailAndPassword } = await import('firebase/auth')
+
+      // Mock failed sign in
+      vi.mocked(signInWithEmailAndPassword).mockRejectedValue({
+        code: 'auth/invalid-credential',
+      })
+
       const store = useAuthStore()
       const result = await store.login('wrongpassword')
 
@@ -56,21 +105,55 @@ describe('auth store', () => {
     })
 
     it('sets admin status for admin users', async () => {
-      const store = useAuthStore()
-      const result = await store.login('yuki2026')
+      const { signInWithEmailAndPassword } = await import('firebase/auth')
+      const { getDoc } = await import('firebase/firestore')
 
-      // Admin status depends on Firebase profile fetch
-      expect(result.success).toBeDefined()
+      vi.mocked(signInWithEmailAndPassword).mockResolvedValue({
+        user: { uid: 'test-uid', email: 'yuki2026@yuki.app' },
+      } as never)
+
+      vi.mocked(getDoc).mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          username: 'matthew',
+          display_name: 'Matthew',
+          role: 'admin',
+        }),
+      } as never)
+
+      const store = useAuthStore()
+      await store.login('yuki2026')
+
+      expect(store.isAdmin).toBe(true)
     })
   })
 
   describe('logout', () => {
-    it('clears user session', () => {
+    it('clears user session', async () => {
+      const { signInWithEmailAndPassword, signOut } = await import('firebase/auth')
+      const { getDoc } = await import('firebase/firestore')
+
+      // Set up logged in state
+      vi.mocked(signInWithEmailAndPassword).mockResolvedValue({
+        user: { uid: 'test-uid', email: 'yuki2026@yuki.app' },
+      } as never)
+
+      vi.mocked(getDoc).mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          username: 'matthew',
+          display_name: 'Matthew',
+          role: 'admin',
+        }),
+      } as never)
+
+      vi.mocked(signOut).mockResolvedValue(undefined)
+
       const store = useAuthStore()
-      store.login('yuki2026')
+      await store.login('yuki2026')
       expect(store.isAuthenticated).toBe(true)
 
-      store.logout()
+      await store.logout()
 
       expect(store.isAuthenticated).toBe(false)
       expect(store.user).toBeNull()
@@ -79,18 +162,30 @@ describe('auth store', () => {
   })
 
   describe('session persistence', () => {
-    it('persists session to localStorage on login', () => {
+    it('persists session to localStorage on login', async () => {
+      const { signInWithEmailAndPassword } = await import('firebase/auth')
+      const { getDoc } = await import('firebase/firestore')
+
+      vi.mocked(signInWithEmailAndPassword).mockResolvedValue({
+        user: { uid: 'test-uid', email: 'yuki2026@yuki.app' },
+      } as never)
+
+      vi.mocked(getDoc).mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          username: 'matthew',
+          display_name: 'Matthew',
+          role: 'admin',
+        }),
+      } as never)
+
       const store = useAuthStore()
-      store.login('yuki2026')
+      await store.login('yuki2026')
 
       expect(localStorageMock.setItem).toHaveBeenCalled()
     })
 
     it('restores session from localStorage on initialize', () => {
-      // Set up a valid session in localStorage
-      const futureDate = new Date()
-      futureDate.setDate(futureDate.getDate() + 7)
-
       const sessionData = {
         user: {
           id: 'matthew-uuid',
@@ -98,7 +193,6 @@ describe('auth store', () => {
           displayName: 'Matthew',
           role: 'admin',
         },
-        expiresAt: futureDate.toISOString(),
         lastActivity: new Date().toISOString(),
       }
 
@@ -110,37 +204,28 @@ describe('auth store', () => {
       expect(store.isAuthenticated).toBe(true)
       expect(store.user?.username).toBe('matthew')
     })
-
-    it('clears expired session on initialize', () => {
-      // Set up an expired session
-      const pastDate = new Date()
-      pastDate.setDate(pastDate.getDate() - 1)
-
-      const sessionData = {
-        user: {
-          id: 'matthew-uuid',
-          username: 'matthew',
-          displayName: 'Matthew',
-          role: 'admin',
-        },
-        expiresAt: pastDate.toISOString(),
-        lastActivity: new Date().toISOString(),
-      }
-
-      localStorageMock.getItem.mockReturnValueOnce(JSON.stringify(sessionData))
-
-      const store = useAuthStore()
-      store.initialize()
-
-      expect(store.isAuthenticated).toBe(false)
-      expect(store.user).toBeNull()
-    })
   })
 
   describe('session validation', () => {
-    it('returns true for valid session', () => {
+    it('returns true for valid session', async () => {
+      const { signInWithEmailAndPassword } = await import('firebase/auth')
+      const { getDoc } = await import('firebase/firestore')
+
+      vi.mocked(signInWithEmailAndPassword).mockResolvedValue({
+        user: { uid: 'test-uid', email: 'yuki2026@yuki.app' },
+      } as never)
+
+      vi.mocked(getDoc).mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          username: 'matthew',
+          display_name: 'Matthew',
+          role: 'admin',
+        }),
+      } as never)
+
       const store = useAuthStore()
-      store.login('yuki2026')
+      await store.login('yuki2026')
 
       expect(store.isSessionValid()).toBe(true)
     })
@@ -153,12 +238,29 @@ describe('auth store', () => {
 
   describe('refreshSession', () => {
     it('persists session on activity', async () => {
+      const { signInWithEmailAndPassword } = await import('firebase/auth')
+      const { getDoc } = await import('firebase/firestore')
+
+      vi.mocked(signInWithEmailAndPassword).mockResolvedValue({
+        user: { uid: 'test-uid', email: 'yuki2026@yuki.app' },
+      } as never)
+
+      vi.mocked(getDoc).mockResolvedValue({
+        exists: () => true,
+        data: () => ({
+          username: 'matthew',
+          display_name: 'Matthew',
+          role: 'admin',
+        }),
+      } as never)
+
       const store = useAuthStore()
       await store.login('yuki2026')
+      localStorageMock.setItem.mockClear()
 
-      // refreshSession updates lastActivity in localStorage
       store.refreshSession()
 
+      expect(localStorageMock.setItem).toHaveBeenCalled()
       // Session expiry is managed by Firebase, sessionExpiresAt is always null
       expect(store.sessionExpiresAt).toBeNull()
     })
@@ -168,6 +270,7 @@ describe('auth store', () => {
       store.refreshSession()
 
       expect(store.sessionExpiresAt).toBeNull()
+      expect(localStorageMock.setItem).not.toHaveBeenCalled()
     })
   })
 })

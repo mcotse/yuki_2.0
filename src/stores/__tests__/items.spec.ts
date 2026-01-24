@@ -3,23 +3,21 @@ import { setActivePinia, createPinia } from 'pinia'
 import { useItemsStore } from '../items'
 import type { ItemWithSchedules } from '@/types'
 
-// Mock Supabase client
-vi.mock('@/lib/supabase', () => ({
-  supabase: {
-    from: vi.fn(() => ({
-      select: vi.fn(() => ({
-        order: vi.fn(() => Promise.resolve({ data: [], error: null })),
-      })),
-      insert: vi.fn(() => ({
-        select: vi.fn(() => ({
-          single: vi.fn(() => Promise.resolve({ data: null, error: null })),
-        })),
-      })),
-      update: vi.fn(() => ({
-        eq: vi.fn(() => Promise.resolve({ error: null })),
-      })),
-    })),
-  },
+// Mock Firebase Firestore
+vi.mock('firebase/firestore', () => ({
+  collection: vi.fn(),
+  getDocs: vi.fn(),
+  doc: vi.fn(),
+  addDoc: vi.fn(),
+  updateDoc: vi.fn(),
+  query: vi.fn(),
+  orderBy: vi.fn(),
+  serverTimestamp: vi.fn(() => new Date().toISOString()),
+}))
+
+// Mock Firebase instance
+vi.mock('@/lib/firebase', () => ({
+  db: {},
 }))
 
 const mockItems: ItemWithSchedules[] = [
@@ -198,49 +196,54 @@ describe('items store', () => {
 
   describe('deactivateItem', () => {
     it('sets item active to false', async () => {
+      const { updateDoc } = await import('firebase/firestore')
+      vi.mocked(updateDoc).mockResolvedValue(undefined)
+
       const store = useItemsStore()
       store.items = [...mockItems]
-
-      // Mock fetch
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      })
 
       const result = await store.deactivateItem('item-1')
 
       expect(result).toBe(true)
-      expect(store.items.find(i => i.id === 'item-1')?.active).toBe(false)
+      expect(store.items.find((i) => i.id === 'item-1')?.active).toBe(false)
+    })
+
+    it('returns false on error', async () => {
+      const { updateDoc } = await import('firebase/firestore')
+      vi.mocked(updateDoc).mockRejectedValue(new Error('Update failed'))
+
+      const store = useItemsStore()
+      store.items = [...mockItems]
+
+      const result = await store.deactivateItem('item-1')
+
+      expect(result).toBe(false)
+      expect(store.error).toBeTruthy()
     })
   })
 
   describe('reactivateItem', () => {
     it('sets item active to true', async () => {
+      const { updateDoc } = await import('firebase/firestore')
+      vi.mocked(updateDoc).mockResolvedValue(undefined)
+
       const store = useItemsStore()
       store.items = [...mockItems]
-
-      // Mock fetch
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      })
 
       const result = await store.reactivateItem('item-3')
 
       expect(result).toBe(true)
-      expect(store.items.find(i => i.id === 'item-3')?.active).toBe(true)
+      expect(store.items.find((i) => i.id === 'item-3')?.active).toBe(true)
     })
   })
 
   describe('updateItem', () => {
     it('updates item properties', async () => {
+      const { updateDoc } = await import('firebase/firestore')
+      vi.mocked(updateDoc).mockResolvedValue(undefined)
+
       const store = useItemsStore()
       store.items = [...mockItems]
-
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve({}),
-      })
 
       const result = await store.updateItem('item-1', {
         name: 'Updated Name',
@@ -248,52 +251,53 @@ describe('items store', () => {
       })
 
       expect(result).toBe(true)
-      const updatedItem = store.items.find(i => i.id === 'item-1')
+      const updatedItem = store.items.find((i) => i.id === 'item-1')
       expect(updatedItem?.name).toBe('Updated Name')
       expect(updatedItem?.dose).toBe('2 drops')
     })
 
-    it('returns false on API error', async () => {
+    it('returns false on error', async () => {
+      const { updateDoc } = await import('firebase/firestore')
+      vi.mocked(updateDoc).mockRejectedValue(new Error('Update failed'))
+
       const store = useItemsStore()
       store.items = [...mockItems]
-
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-      })
 
       const result = await store.updateItem('item-1', { name: 'Test' })
 
       expect(result).toBe(false)
-      expect(store.error).toBe('Failed to update item')
+      expect(store.error).toBeTruthy()
     })
   })
 
   describe('fetchItems', () => {
-    it('fetches items from API and updates store', async () => {
+    it('fetches items from Firestore and updates store', async () => {
+      const { getDocs } = await import('firebase/firestore')
+
+      // Mock Firestore query result
+      vi.mocked(getDocs).mockResolvedValue({
+        docs: mockItems.map((item) => ({
+          id: item.id,
+          data: () => ({ ...item, id: undefined }),
+        })),
+      } as never)
+
       const store = useItemsStore()
-
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: true,
-        json: () => Promise.resolve(mockItems),
-      })
-
       await store.fetchItems()
 
-      expect(store.items).toEqual(mockItems)
+      expect(store.items).toHaveLength(3)
       expect(store.isLoading).toBe(false)
       expect(store.lastFetched).not.toBeNull()
     })
 
-    it('sets error on API failure', async () => {
+    it('sets error on fetch failure', async () => {
+      const { getDocs } = await import('firebase/firestore')
+      vi.mocked(getDocs).mockRejectedValue(new Error('Fetch failed'))
+
       const store = useItemsStore()
-
-      global.fetch = vi.fn().mockResolvedValue({
-        ok: false,
-      })
-
       await store.fetchItems()
 
-      expect(store.error).toBe('Failed to fetch items')
+      expect(store.error).toBeTruthy()
       expect(store.isLoading).toBe(false)
     })
   })

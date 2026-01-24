@@ -137,9 +137,8 @@ test.describe('Medication Card Actions', () => {
       // Wait for update
       await page.waitForLoadState('networkidle')
 
-      // Should see "Snoozed until" text somewhere
-      const snoozedText = page.getByText(/Snoozed until/)
-      // May or may not be visible depending on if item moved to snoozed section
+      // Item may have moved to snoozed section - page should still be functional
+      await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible()
     }
   })
 
@@ -210,10 +209,6 @@ test.describe('Conflict Detection', () => {
   test('should display conflict warning banner on card', async ({ page }) => {
     // If there's a recent confirmation in the same conflict group,
     // the card should show a warning with AlertTriangle icon
-    const conflictWarning = page.locator('.text-tertiary').filter({
-      has: page.locator('svg.lucide-alert-triangle'),
-    })
-
     // This may or may not be visible depending on data state
     // Just verify the page loads correctly
     await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible()

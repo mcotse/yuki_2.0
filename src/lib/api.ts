@@ -37,12 +37,12 @@ async function request<T>(
 
 // Query builder to match Supabase-like syntax
 function createQueryBuilder<T>(tableName: string) {
-  let queryParams: Record<string, string> = {}
-  let selectFields = '*'
+  const queryParams: Record<string, string> = {}
 
   const builder = {
-    select(fields = '*') {
-      selectFields = fields
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    select(_fields = '*') {
+      // Field selection not yet implemented - accepts parameter for API compatibility
       return builder
     },
 

@@ -36,6 +36,7 @@ app.use('/api/conflict-groups', conflictGroupsRouter)
 app.use('/api/test-fixtures', testFixturesRouter)
 
 // Error handler
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Error:', err)
   res.status(500).json({ error: err.message })

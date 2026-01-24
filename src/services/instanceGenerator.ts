@@ -119,7 +119,8 @@ export async function ensureTodayInstances(items: ItemWithSchedules[]): Promise<
  * Expire overdue pending instances
  * Called periodically to mark items as expired if past cutoff
  */
-export async function expireOverdueInstances(_date: string, _cutoffMinutes = 30): Promise<number> {
+export async function expireOverdueInstances(_date: string, _cutoffMinutes: number = 30): Promise<number> {
+  void _cutoffMinutes // Suppress unused parameter warning
   // TODO: Implement with new API - needs backend endpoint for bulk update
   // For now, this is handled by the instances store
   return 0

@@ -27,11 +27,6 @@ async function clearIsolatedConfirmations(page: Page) {
   expect(response.ok()).toBeTruthy()
 }
 
-// Helper to clear all confirmations via API (for tests not using isolated data)
-async function clearConfirmations(page: Page) {
-  await page.request.post(`${API_BASE}/api/test-fixtures/clear-confirmations`)
-}
-
 test.describe('Admin Settings Page', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')

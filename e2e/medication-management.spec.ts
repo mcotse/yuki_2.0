@@ -1,7 +1,5 @@
 import { test, expect, Page } from '@playwright/test'
 
-const API_BASE = 'http://localhost:3000'
-
 // Unique prefix for medication management tests
 const TEST_PREFIX = 'MEDMGMT'
 
@@ -89,9 +87,6 @@ test.describe('Medication Management - View Medications', () => {
   test('can toggle show inactive', async ({ page }) => {
     // Wait for medications to load
     await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
-
-    // Get initial count
-    const initialCount = await page.locator('.card').count()
 
     // Toggle show inactive
     const showInactiveCheckbox = page.locator('input[type="checkbox"]')

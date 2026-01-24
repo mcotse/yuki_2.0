@@ -197,10 +197,13 @@ export const useItemsStore = defineStore('items', () => {
 
       // Update local state
       const index = items.value.findIndex((item) => item.id === id)
-      if (index !== -1) {
+      const existingItem = items.value[index]
+      if (index !== -1 && existingItem) {
         items.value[index] = {
-          ...items.value[index],
+          ...existingItem,
           ...updates,
+          id: existingItem.id, // Preserve required fields
+          schedules: existingItem.schedules,
           updated_at: new Date().toISOString(),
         }
       }
@@ -231,10 +234,11 @@ export const useItemsStore = defineStore('items', () => {
 
       // Update local state
       const index = items.value.findIndex((item) => item.id === id)
-      if (index !== -1) {
+      const existingItem = items.value[index]
+      if (index !== -1 && existingItem) {
         items.value[index] = {
-          ...items.value[index],
-          schedules: schedules.map((s, idx) => ({
+          ...existingItem,
+          schedules: schedules.map((s, idx): ItemSchedule => ({
             id: `${id}-schedule-${idx}`,
             item_id: id,
             time_slot: s.time_slot,

@@ -3,8 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useItemsStore } from '@/stores/items'
 import { useAuth } from '@/composables/useAuth'
-import type { ItemWithSchedules, ItemType, ItemCategory, ItemFrequency } from '@/types'
-import type { Database } from '@/types/database'
+import type { ItemWithSchedules, ItemType, ItemCategory, ItemFrequency, ItemInput } from '@/types'
 import {
   ArrowLeft,
   Plus,
@@ -20,7 +19,7 @@ import {
   ChevronUp,
 } from 'lucide-vue-next'
 
-type ItemInsert = Database['public']['Tables']['items']['Insert']
+// ItemInput is the type for creating new items
 
 const router = useRouter()
 const itemsStore = useItemsStore()
@@ -185,7 +184,7 @@ async function saveItem() {
       })
     } else {
       // Create new item
-      const itemData: ItemInsert = {
+      const itemData: Partial<ItemInput> = {
         name: formData.value.name,
         type: formData.value.type,
         category: formData.value.category,

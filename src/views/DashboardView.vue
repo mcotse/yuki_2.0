@@ -8,7 +8,7 @@ import { getToday } from '@/utils/date'
 import MedicationCard from '@/components/dashboard/MedicationCard.vue'
 import QuickLogCard from '@/components/dashboard/QuickLogCard.vue'
 import { RefreshCw, AlertCircle, ChevronDown, Droplet, Pill, Leaf, Utensils, X, Filter } from 'lucide-vue-next'
-import type { ScheduledInstance } from '@/types'
+import type { DailyInstanceWithItem } from '@/types'
 
 const itemsStore = useItemsStore()
 const instancesStore = useInstancesStore()
@@ -42,7 +42,7 @@ const filterOptions = [
 ]
 
 // Filter function for instances
-function filterInstances(instances: ScheduledInstance[]): ScheduledInstance[] {
+function filterInstances(instances: DailyInstanceWithItem[]): DailyInstanceWithItem[] {
   if (!activeFilter.value) return instances
   return instances.filter((instance) => {
     const category = instance.item.category
@@ -92,8 +92,8 @@ async function refreshDashboard() {
   await instancesStore.refreshInstances()
 }
 
-function confirmMedication(instanceId: string, overrideConflict: boolean) {
-  instancesStore.confirmInstance(instanceId, undefined, overrideConflict)
+function confirmMedication(instanceId: string, overrideConflict?: boolean) {
+  instancesStore.confirmInstance(instanceId, undefined, overrideConflict ?? false)
 }
 
 function undoMedication(instanceId: string) {

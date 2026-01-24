@@ -15,7 +15,7 @@ async function handleLogin() {
   isLoading.value = true
 
   try {
-    const result = authStore.login(password.value)
+    const result = await authStore.login(password.value)
 
     if (result.success) {
       // Redirect to dashboard

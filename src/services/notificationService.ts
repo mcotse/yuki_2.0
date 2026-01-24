@@ -2,6 +2,11 @@ import { getToken, onMessage, type MessagePayload } from 'firebase/messaging'
 import { messaging } from '@/lib/firebase'
 import type { DailyInstanceWithItem } from '@/types'
 
+// Extended notification options (vibrate is supported but not in all TS definitions)
+interface ExtendedNotificationOptions extends NotificationOptions {
+  vibrate?: number[]
+}
+
 interface ScheduledNotification {
   instanceId: string
   timeoutId: ReturnType<typeof setTimeout>
@@ -143,8 +148,8 @@ class NotificationService {
         data,
         requireInteraction: true,
         vibrate: [200, 100, 200],
-      })
-    } catch (error) {
+      } as ExtendedNotificationOptions)
+    } catch {
       // Fallback to basic Notification API
       new Notification(title, {
         body,
@@ -190,8 +195,8 @@ class NotificationService {
         data: { instanceId: instance.id },
         requireInteraction: true, // Keep notification visible until user interacts
         vibrate: [200, 100, 200],
-      })
-    } catch (error) {
+      } as ExtendedNotificationOptions)
+    } catch {
       // Fallback to basic Notification API
       new Notification(title, {
         body,

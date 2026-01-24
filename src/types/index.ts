@@ -97,6 +97,7 @@ export interface ConflictCheck {
   hasConflict: boolean
   conflictingItemName?: string
   remainingMinutes?: number
+  remainingSeconds?: number
   canOverride: boolean
 }
 

@@ -225,10 +225,11 @@ export const useInstancesStore = defineStore('instances', () => {
     }
 
     const remainingMs = Math.max(0, conflictThreshold - timeSince)
+    const remainingSeconds = Math.ceil(remainingMs / 1000)
     const remainingMinutes = Math.ceil(remainingMs / 60000)
 
     // Only show conflict if there's actually time remaining
-    if (remainingMinutes <= 0) {
+    if (remainingSeconds <= 0) {
       return { hasConflict: false, canOverride: true }
     }
 
@@ -236,6 +237,7 @@ export const useInstancesStore = defineStore('instances', () => {
       hasConflict: true,
       conflictingItemName: mostRecent.item.name,
       remainingMinutes: Math.max(1, Math.min(remainingMinutes, CONFLICT_SPACING_MINUTES)),
+      remainingSeconds: Math.max(1, remainingSeconds),
       canOverride: true, // Always allow override as per spec
     }
   }
@@ -417,7 +419,7 @@ export const useInstancesStore = defineStore('instances', () => {
         schedule_id: null,
         date: formatDate(scheduledTime),
         scheduled_time: scheduledTime.toISOString(),
-        status: 'pending',
+        status: 'pending' as const,
         confirmed_at: null,
         confirmed_by: null,
         snooze_until: null,
@@ -611,12 +613,15 @@ const QUICK_LOG_CATEGORIES: Record<string, { name: string; type: 'food' | 'suppl
   other: { name: 'Quick Log', type: 'supplement', category: 'oral' },
 }
 
+// Default category for quick logs
+const DEFAULT_QUICK_LOG_CATEGORY = { name: 'Quick Log', type: 'supplement' as const, category: 'oral' }
+
 // Create a display-friendly item for quick log entries
 function createQuickLogDisplayItem(notes: string | null, baseItem: Item): Item {
   // Parse category from notes format: "[category] optional note"
   const categoryMatch = notes?.match(/^\[(\w+)\]/)
-  const categoryKey = categoryMatch ? categoryMatch[1].toLowerCase() : 'other'
-  const categoryInfo = QUICK_LOG_CATEGORIES[categoryKey] || QUICK_LOG_CATEGORIES.other
+  const categoryKey = categoryMatch?.[1]?.toLowerCase() ?? 'other'
+  const categoryInfo = QUICK_LOG_CATEGORIES[categoryKey] ?? DEFAULT_QUICK_LOG_CATEGORY
 
   // Extract the note text after the category tag
   const noteText = notes?.replace(/^\[\w+\]\s*/, '') || ''

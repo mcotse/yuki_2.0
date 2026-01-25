@@ -226,12 +226,9 @@ export const useInstancesStore = defineStore('instances', () => {
         targetDate.setDate(targetDate.getDate() + i)
         const dateString = formatDate(targetDate)
 
-        // Generate instances for the date if needed
-        const { generateInstancesForDate } = await import('@/services/instanceGenerator')
-        await generateInstancesForDate(dateString, itemsStore.items)
-
         // Fetch from local data or Firebase
         if (!db) {
+          // localData.getInstancesForDate auto-generates instances if they don't exist
           const instanceRows = localData.getInstancesForDate(dateString)
           for (const instance of instanceRows) {
             const item = itemsStore.getItemById(instance.item_id)
@@ -240,6 +237,10 @@ export const useInstancesStore = defineStore('instances', () => {
             }
           }
         } else {
+          // Generate instances for the date if needed (Firebase mode)
+          const { generateInstancesForDate } = await import('@/services/instanceGenerator')
+          await generateInstancesForDate(dateString, itemsStore.items)
+
           const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
           const q = query(
             instancesRef,

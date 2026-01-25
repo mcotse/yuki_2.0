@@ -223,52 +223,49 @@ function handleSnooze(minutes: SnoozeInterval) {
         </div>
       </div>
 
-      <!-- Actions - Grid layout for consistent alignment -->
-      <div v-if="!compact" class="flex items-center flex-shrink-0">
-        <!-- Primary action: Confirm -->
+      <!-- Actions -->
+      <div v-if="!compact" class="flex items-center gap-1 flex-shrink-0">
+        <!-- Expand Button - only show if notes exist -->
         <button
-          v-if="status !== 'confirmed' && status !== 'upcoming'"
-          class="btn btn-primary py-2 px-4 text-sm mr-1"
-          :class="{ 'animate-bounce': isConfirming }"
-          :disabled="isConfirming"
-          @click="handleConfirm"
+          v-if="instance.item.notes"
+          class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+          @click="isExpanded = !isExpanded"
         >
-          <Check class="w-4 h-4" />
+          <component
+            :is="isExpanded ? ChevronUp : ChevronDown"
+            class="w-[18px] h-[18px] text-muted-foreground"
+          />
         </button>
 
-        <!-- Secondary actions container - fixed width for alignment -->
-        <div class="flex items-center gap-0.5 w-[72px] justify-end">
-          <!-- Snooze Button -->
-          <button
-            v-if="status === 'due' || status === 'overdue'"
-            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
-            @click="showSnoozeOptions = !showSnoozeOptions"
-          >
-            <Clock class="w-[18px] h-[18px] text-muted-foreground" />
-          </button>
+        <!-- Confirm Button - compact pill style with visible check icon -->
+        <button
+          v-if="status !== 'confirmed' && status !== 'upcoming'"
+          class="w-12 h-9 p-0 rounded-full flex items-center justify-center bg-accent shadow-md hover:shadow-lg active:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+          :class="{ 'animate-bounce': isConfirming }"
+          :disabled="isConfirming"
+          @click.stop="handleConfirm"
+        >
+          <Check class="w-5 h-5 text-white" :stroke-width="2.5" />
+        </button>
 
-          <!-- Expand Button - only show if notes exist -->
-          <button
-            v-if="instance.item.notes"
-            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
-            @click="isExpanded = !isExpanded"
-          >
-            <component
-              :is="isExpanded ? ChevronUp : ChevronDown"
-              class="w-[18px] h-[18px] text-muted-foreground"
-            />
-          </button>
+        <!-- Snooze Button -->
+        <button
+          v-if="status === 'due' || status === 'overdue'"
+          class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+          @click.stop="showSnoozeOptions = !showSnoozeOptions"
+        >
+          <Clock class="w-[18px] h-[18px] text-muted-foreground" />
+        </button>
 
-          <!-- Undo Button for confirmed cards -->
-          <button
-            v-if="status === 'confirmed'"
-            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
-            @click="emit('undo')"
-            aria-label="Undo confirmation"
-          >
-            <Undo2 class="w-[18px] h-[18px] text-muted-foreground" />
-          </button>
-        </div>
+        <!-- Undo Button for confirmed cards -->
+        <button
+          v-if="status === 'confirmed'"
+          class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+          @click.stop="emit('undo')"
+          aria-label="Undo confirmation"
+        >
+          <Undo2 class="w-[18px] h-[18px] text-muted-foreground" />
+        </button>
       </div>
     </div>
 
@@ -284,7 +281,7 @@ function handleSnooze(minutes: SnoozeInterval) {
     </div>
 
     <!-- Snooze Options -->
-    <div v-if="!compact && showSnoozeOptions" class="mt-3 flex items-center gap-2">
+    <div v-if="!compact && showSnoozeOptions" class="mt-3 flex items-center gap-2" @click.stop>
       <span class="text-sm text-muted-foreground">Snooze for:</span>
       <button
         class="px-3 py-1 rounded-full text-sm font-medium bg-tertiary/20 text-tertiary hover:bg-tertiary/30 transition-colors"

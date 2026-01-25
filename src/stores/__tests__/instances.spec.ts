@@ -500,5 +500,24 @@ describe('instances store', () => {
       expect(store.isLoading).toBe(false)
       expect(store.error).toBeNull()
     })
+
+    it('resets upcomingDaysInstances', () => {
+      const store = useInstancesStore()
+      store.upcomingDaysInstances = [createMockInstance()]
+      store.isLoadingUpcoming = true
+
+      store.$reset()
+
+      expect(store.upcomingDaysInstances).toEqual([])
+      expect(store.isLoadingUpcoming).toBe(false)
+    })
+  })
+
+  describe('upcomingDaysInstances state', () => {
+    it('starts with empty upcomingDaysInstances array', () => {
+      const store = useInstancesStore()
+      expect(store.upcomingDaysInstances).toEqual([])
+      expect(store.isLoadingUpcoming).toBe(false)
+    })
   })
 })

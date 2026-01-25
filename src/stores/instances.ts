@@ -33,8 +33,10 @@ const CONFLICT_SPACING_MINUTES = 5
 export const useInstancesStore = defineStore('instances', () => {
   // State
   const instances = ref<DailyInstanceWithItem[]>([])
+  const upcomingDaysInstances = ref<DailyInstanceWithItem[]>([])
   const selectedDate = ref<string>(formatDate(new Date()))
   const isLoading = ref(false)
+  const isLoadingUpcoming = ref(false)
   const error = ref<string | null>(null)
   const lastFetched = ref<Date | null>(null)
 
@@ -202,6 +204,71 @@ export const useInstancesStore = defineStore('instances', () => {
 
   async function refreshInstances(): Promise<void> {
     await fetchInstancesForDate(selectedDate.value)
+  }
+
+  /**
+   * Fetch instances for upcoming days (tomorrow through the next N days)
+   */
+  async function fetchUpcomingDaysInstances(daysAhead: number = 3): Promise<void> {
+    isLoadingUpcoming.value = true
+
+    try {
+      // Ensure items are loaded
+      if (itemsStore.items.length === 0) {
+        await itemsStore.fetchItems()
+      }
+
+      const allUpcomingInstances: DailyInstanceWithItem[] = []
+
+      // Fetch instances for each upcoming day
+      for (let i = 1; i <= daysAhead; i++) {
+        const targetDate = new Date()
+        targetDate.setDate(targetDate.getDate() + i)
+        const dateString = formatDate(targetDate)
+
+        // Generate instances for the date if needed
+        const { generateInstancesForDate } = await import('@/services/instanceGenerator')
+        await generateInstancesForDate(dateString, itemsStore.items)
+
+        // Fetch from local data or Firebase
+        if (!db) {
+          const instanceRows = localData.getInstancesForDate(dateString)
+          for (const instance of instanceRows) {
+            const item = itemsStore.getItemById(instance.item_id)
+            if (item) {
+              allUpcomingInstances.push({ ...instance, item })
+            }
+          }
+        } else {
+          const instancesRef = collection(db, COLLECTIONS.DAILY_INSTANCES)
+          const q = query(
+            instancesRef,
+            where('date', '==', dateString),
+            orderBy('scheduled_time'),
+          )
+          const snapshot = await getDocs(q)
+
+          for (const docSnap of snapshot.docs) {
+            const instance = docToInstance(docSnap.data(), docSnap.id)
+            const item = itemsStore.getItemById(instance.item_id)
+            if (item) {
+              allUpcomingInstances.push({ ...instance, item })
+            }
+          }
+        }
+      }
+
+      // Sort by scheduled time
+      allUpcomingInstances.sort((a, b) =>
+        new Date(a.scheduled_time).getTime() - new Date(b.scheduled_time).getTime()
+      )
+
+      upcomingDaysInstances.value = allUpcomingInstances
+    } catch (e) {
+      console.error('Error fetching upcoming instances:', e)
+    } finally {
+      isLoadingUpcoming.value = false
+    }
   }
 
   function checkConflict(instance: DailyInstanceWithItem): ConflictCheck {
@@ -655,8 +722,10 @@ export const useInstancesStore = defineStore('instances', () => {
   // Clear store state
   function $reset() {
     instances.value = []
+    upcomingDaysInstances.value = []
     selectedDate.value = formatDate(new Date())
     isLoading.value = false
+    isLoadingUpcoming.value = false
     error.value = null
     lastFetched.value = null
   }
@@ -664,8 +733,10 @@ export const useInstancesStore = defineStore('instances', () => {
   return {
     // State
     instances,
+    upcomingDaysInstances,
     selectedDate,
     isLoading,
+    isLoadingUpcoming,
     error,
     lastFetched,
 
@@ -677,6 +748,7 @@ export const useInstancesStore = defineStore('instances', () => {
     // Actions
     fetchInstancesForDate,
     refreshInstances,
+    fetchUpcomingDaysInstances,
     checkConflict,
     confirmInstance,
     undoConfirmation,

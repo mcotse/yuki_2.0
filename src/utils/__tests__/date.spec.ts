@@ -9,9 +9,13 @@ import {
   getEndOfToday,
   combineDateAndTime,
   isToday,
+  isTomorrow,
+  getTomorrow,
+  getDateFromToday,
   getRelativeTime,
   getTimeSlotFromHour,
   formatDisplayDate,
+  formatFutureDisplayDate,
 } from '../date'
 
 describe('date utilities', () => {
@@ -196,6 +200,108 @@ describe('date utilities', () => {
     it('returns formatted date for other days', () => {
       const otherDay = new Date(2024, 0, 10)
       expect(formatDisplayDate(otherDay)).toBe('Jan 10')
+    })
+  })
+
+  describe('isTomorrow', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2024, 0, 15, 12, 0, 0))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('returns true for tomorrow', () => {
+      const tomorrow = new Date(2024, 0, 16)
+      expect(isTomorrow(tomorrow)).toBe(true)
+    })
+
+    it('returns false for today', () => {
+      const today = new Date(2024, 0, 15)
+      expect(isTomorrow(today)).toBe(false)
+    })
+
+    it('returns false for day after tomorrow', () => {
+      const dayAfter = new Date(2024, 0, 17)
+      expect(isTomorrow(dayAfter)).toBe(false)
+    })
+  })
+
+  describe('getTomorrow', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2024, 0, 15, 12, 0, 0))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('returns tomorrow in YYYY-MM-DD format', () => {
+      expect(getTomorrow()).toBe('2024-01-16')
+    })
+  })
+
+  describe('getDateFromToday', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2024, 0, 15, 12, 0, 0))
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('returns today for 0 days', () => {
+      expect(getDateFromToday(0)).toBe('2024-01-15')
+    })
+
+    it('returns tomorrow for 1 day', () => {
+      expect(getDateFromToday(1)).toBe('2024-01-16')
+    })
+
+    it('returns date 3 days from now', () => {
+      expect(getDateFromToday(3)).toBe('2024-01-18')
+    })
+
+    it('returns yesterday for -1 day', () => {
+      expect(getDateFromToday(-1)).toBe('2024-01-14')
+    })
+  })
+
+  describe('formatFutureDisplayDate', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(2024, 0, 15, 12, 0, 0)) // Monday Jan 15, 2024
+    })
+
+    afterEach(() => {
+      vi.useRealTimers()
+    })
+
+    it('returns "Today" for today', () => {
+      const today = new Date(2024, 0, 15)
+      expect(formatFutureDisplayDate(today)).toBe('Today')
+    })
+
+    it('returns "Tomorrow" for tomorrow', () => {
+      const tomorrow = new Date(2024, 0, 16)
+      expect(formatFutureDisplayDate(tomorrow)).toBe('Tomorrow')
+    })
+
+    it('returns weekday name for dates within 7 days', () => {
+      const threeDaysAhead = new Date(2024, 0, 18) // Thursday
+      expect(formatFutureDisplayDate(threeDaysAhead)).toBe('Thursday')
+
+      const sixDaysAhead = new Date(2024, 0, 21) // Sunday
+      expect(formatFutureDisplayDate(sixDaysAhead)).toBe('Sunday')
+    })
+
+    it('returns formatted date for dates more than 7 days away', () => {
+      const twoWeeksAhead = new Date(2024, 0, 29)
+      expect(formatFutureDisplayDate(twoWeeksAhead)).toBe('Jan 29')
     })
   })
 })

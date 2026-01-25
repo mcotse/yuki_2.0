@@ -148,3 +148,52 @@ export function formatDisplayDate(date: Date): string {
 
   return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
+
+/**
+ * Check if a date is tomorrow
+ */
+export function isTomorrow(date: Date): boolean {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return (
+    date.getFullYear() === tomorrow.getFullYear() &&
+    date.getMonth() === tomorrow.getMonth() &&
+    date.getDate() === tomorrow.getDate()
+  )
+}
+
+/**
+ * Get tomorrow's date as YYYY-MM-DD
+ */
+export function getTomorrow(): string {
+  const tomorrow = new Date()
+  tomorrow.setDate(tomorrow.getDate() + 1)
+  return formatLocalDate(tomorrow)
+}
+
+/**
+ * Get a date N days from today as YYYY-MM-DD
+ */
+export function getDateFromToday(daysFromNow: number): string {
+  const date = new Date()
+  date.setDate(date.getDate() + daysFromNow)
+  return formatLocalDate(date)
+}
+
+/**
+ * Format a future date for display (e.g., "Tomorrow", "Wednesday", "Jan 20")
+ */
+export function formatFutureDisplayDate(date: Date): string {
+  const today = new Date()
+
+  if (isToday(date)) return 'Today'
+  if (isTomorrow(date)) return 'Tomorrow'
+
+  // Check if within the next 7 days - show weekday name
+  const daysUntil = Math.ceil((date.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (daysUntil > 0 && daysUntil <= 7) {
+    return date.toLocaleDateString('en-US', { weekday: 'long' })
+  }
+
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}

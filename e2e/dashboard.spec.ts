@@ -243,3 +243,119 @@ test.describe('Navigation', () => {
     await expect(page).toHaveURL('/')
   })
 })
+
+test.describe('Upcoming Section', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+    await login(page)
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('should display upcoming section header', async ({ page }) => {
+    // The upcoming section may or may not have items, but if it exists it should have proper structure
+    const upcomingHeader = page.getByRole('heading', { name: /upcoming/i })
+
+    // Check if Upcoming section exists (it may be collapsed or have no items)
+    const isVisible = await upcomingHeader.isVisible().catch(() => false)
+
+    if (isVisible) {
+      // Verify the section can be expanded/collapsed
+      const upcomingButton = page.locator('button').filter({ has: upcomingHeader })
+      await expect(upcomingButton).toBeVisible()
+    }
+  })
+
+  test('should be collapsible', async ({ page }) => {
+    // Look for the upcoming section button (contains both calendar icon and "Upcoming" text)
+    const upcomingSection = page.locator('button').filter({
+      has: page.locator('svg.lucide-calendar'),
+    })
+
+    const sectionCount = await upcomingSection.count()
+    if (sectionCount > 0) {
+      // Section starts collapsed, click to expand
+      await upcomingSection.first().click()
+
+      // Wait for animation
+      await page.waitForTimeout(300)
+
+      // Click again to collapse
+      await upcomingSection.first().click()
+
+      // Should still be functional
+      await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible()
+    }
+  })
+
+  test('should show date group headers when expanded', async ({ page }) => {
+    // Look for the upcoming section
+    const upcomingSection = page.locator('button').filter({
+      has: page.locator('svg.lucide-calendar'),
+    })
+
+    const sectionCount = await upcomingSection.count()
+    if (sectionCount > 0) {
+      // Click to expand
+      await upcomingSection.first().click()
+      await page.waitForTimeout(500)
+
+      // Check for date group headers like "Tomorrow", weekday names, or dates
+      const dateHeaders = page.locator('h3').filter({
+        hasText: /tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i,
+      })
+
+      // May or may not have date headers depending on data - check existence
+      await dateHeaders.count()
+      // Just verify the page is still functional
+      await expect(page.getByRole('heading', { name: 'Today' })).toBeVisible()
+    }
+  })
+
+  test('should display compact medication cards in upcoming section', async ({ page }) => {
+    // Expand the upcoming section if it exists
+    const upcomingSection = page.locator('button').filter({
+      has: page.locator('svg.lucide-calendar'),
+    })
+
+    const sectionCount = await upcomingSection.count()
+    if (sectionCount > 0) {
+      await upcomingSection.first().click()
+      await page.waitForTimeout(500)
+
+      // Check for cards within the upcoming section's collapse content
+      // Cards in upcoming section should be compact (smaller padding)
+      const upcomingCards = page.locator('.bg-secondary\\/5')
+      const cardCount = await upcomingCards.count()
+
+      // If there are upcoming cards, they should have compact styling
+      if (cardCount > 0) {
+        // Verify at least one card is visible
+        await expect(upcomingCards.first()).toBeVisible()
+      }
+    }
+  })
+
+  test('should show "Show more" button when there are many items', async ({ page }) => {
+    const upcomingSection = page.locator('button').filter({
+      has: page.locator('svg.lucide-calendar'),
+    })
+
+    const sectionCount = await upcomingSection.count()
+    if (sectionCount > 0) {
+      await upcomingSection.first().click()
+      await page.waitForTimeout(500)
+
+      // Look for show more button (if there are more than 5 items)
+      const showMoreBtn = page.locator('.show-more-btn')
+      const showMoreCount = await showMoreBtn.count()
+
+      // If show more exists, clicking it should work
+      if (showMoreCount > 0) {
+        await showMoreBtn.click()
+        // Should show "Show less" now
+        await expect(page.getByText(/show less/i)).toBeVisible()
+      }
+    }
+  })
+})

@@ -4,10 +4,10 @@ import { storeToRefs } from 'pinia'
 import { useItemsStore } from '@/stores/items'
 import { useInstancesStore } from '@/stores/instances'
 import { generateInstancesForDate } from '@/services/instanceGenerator'
-import { getToday } from '@/utils/date'
+import { getToday, formatFutureDisplayDate } from '@/utils/date'
 import MedicationCard from '@/components/dashboard/MedicationCard.vue'
 import QuickLogCard from '@/components/dashboard/QuickLogCard.vue'
-import { RefreshCw, AlertCircle, ChevronDown, Droplet, Pill, Leaf, Utensils, X, Filter } from 'lucide-vue-next'
+import { RefreshCw, AlertCircle, ChevronDown, Droplet, Pill, Leaf, Utensils, X, Filter, Calendar } from 'lucide-vue-next'
 import type { DailyInstanceWithItem } from '@/types'
 
 const itemsStore = useItemsStore()
@@ -17,7 +17,7 @@ const isLoading = computed(() => itemsStore.isLoading || instancesStore.isLoadin
 const error = computed(() => itemsStore.error || instancesStore.error)
 
 // Use storeToRefs to maintain reactivity for computed properties
-const { instancesByStatus, pendingCount, confirmedCount } = storeToRefs(instancesStore)
+const { instancesByStatus, pendingCount, confirmedCount, upcomingDaysInstances, isLoadingUpcoming } = storeToRefs(instancesStore)
 
 // Filter state
 const activeFilter = ref<string | null>(null)
@@ -26,11 +26,16 @@ const activeFilter = ref<string | null>(null)
 const filtersCollapsed = ref(true) // Start collapsed for less intrusive UI
 const overdueCollapsed = ref(false)
 const upcomingCollapsed = ref(false)
+const upcomingDaysCollapsed = ref(true) // Start collapsed to focus on today
 const completedCollapsed = ref(false)
 
 // Upcoming section - show limited items with "load more"
 const UPCOMING_INITIAL_COUNT = 3
 const upcomingShowAll = ref(false)
+
+// Upcoming days section - show limited items with "load more"
+const UPCOMING_DAYS_INITIAL_COUNT = 5
+const upcomingDaysShowAll = ref(false)
 
 // Filter options with icons and colors
 const filterOptions = [
@@ -69,6 +74,61 @@ const visibleUpcoming = computed(() => {
 const hasMoreUpcoming = computed(() => filteredUpcoming.value.length > UPCOMING_INITIAL_COUNT)
 const hiddenUpcomingCount = computed(() => filteredUpcoming.value.length - UPCOMING_INITIAL_COUNT)
 
+// Filtered upcoming days instances (future days)
+const filteredUpcomingDays = computed(() => filterInstances(upcomingDaysInstances.value))
+
+// Group upcoming days by date
+const upcomingDaysGrouped = computed(() => {
+  const groups: { date: string; displayDate: string; instances: DailyInstanceWithItem[] }[] = []
+  const dateMap = new Map<string, DailyInstanceWithItem[]>()
+
+  for (const instance of filteredUpcomingDays.value) {
+    const date = instance.date
+    if (!dateMap.has(date)) {
+      dateMap.set(date, [])
+    }
+    dateMap.get(date)!.push(instance)
+  }
+
+  for (const [date, instances] of dateMap) {
+    groups.push({
+      date,
+      displayDate: formatFutureDisplayDate(new Date(date + 'T00:00:00')),
+      instances,
+    })
+  }
+
+  return groups
+})
+
+// Visible upcoming days (limited unless "show all" is enabled)
+const visibleUpcomingDaysGroups = computed(() => {
+  if (upcomingDaysShowAll.value) return upcomingDaysGrouped.value
+
+  // Show only first few items across all groups
+  const groups: { date: string; displayDate: string; instances: DailyInstanceWithItem[] }[] = []
+  let count = 0
+
+  for (const group of upcomingDaysGrouped.value) {
+    if (count >= UPCOMING_DAYS_INITIAL_COUNT) break
+
+    const remainingSlots = UPCOMING_DAYS_INITIAL_COUNT - count
+    const visibleInstances = group.instances.slice(0, remainingSlots)
+    if (visibleInstances.length > 0) {
+      groups.push({
+        ...group,
+        instances: visibleInstances,
+      })
+      count += visibleInstances.length
+    }
+  }
+
+  return groups
+})
+
+const hasMoreUpcomingDays = computed(() => filteredUpcomingDays.value.length > UPCOMING_DAYS_INITIAL_COUNT)
+const hiddenUpcomingDaysCount = computed(() => Math.max(0, filteredUpcomingDays.value.length - UPCOMING_DAYS_INITIAL_COUNT))
+
 // Toggle filter
 function toggleFilter(filterId: string) {
   activeFilter.value = activeFilter.value === filterId ? null : filterId
@@ -86,6 +146,9 @@ async function loadDashboard() {
 
   // Fetch instances for today
   await instancesStore.fetchInstancesForDate(today)
+
+  // Fetch upcoming days instances (next 3 days)
+  instancesStore.fetchUpcomingDaysInstances(3)
 }
 
 async function refreshDashboard() {
@@ -291,6 +354,72 @@ onMounted(loadDashboard)
                   <ChevronDown
                     class="w-4 h-4 transition-transform duration-200"
                     :class="{ '-rotate-180': upcomingShowAll }"
+                  />
+                </button>
+              </div>
+            </div>
+          </div>
+        </Transition>
+      </section>
+
+      <!-- Upcoming Days Section -->
+      <section v-if="upcomingDaysInstances.length > 0 || isLoadingUpcoming" class="mb-8">
+        <button
+          class="flex items-center gap-2 w-full text-left mb-3 group"
+          @click="upcomingDaysCollapsed = !upcomingDaysCollapsed"
+        >
+          <Calendar class="w-4 h-4 text-secondary/70" />
+          <h2 class="text-sm font-bold text-secondary uppercase tracking-wider">
+            Upcoming
+          </h2>
+          <span class="text-xs text-secondary/70 font-medium">({{ filteredUpcomingDays.length }})</span>
+          <ChevronDown
+            class="w-4 h-4 text-secondary/70 transition-transform duration-300"
+            :class="{ '-rotate-180': upcomingDaysCollapsed }"
+          />
+        </button>
+        <Transition name="collapse">
+          <div v-show="!upcomingDaysCollapsed" class="collapse-content">
+            <!-- Loading state -->
+            <div v-if="isLoadingUpcoming" class="py-4 text-center">
+              <RefreshCw class="w-5 h-5 mx-auto text-secondary animate-spin mb-2" />
+              <p class="text-sm text-muted-foreground">Loading upcoming...</p>
+            </div>
+
+            <!-- Grouped by date -->
+            <div v-else class="space-y-4">
+              <div
+                v-for="group in visibleUpcomingDaysGroups"
+                :key="group.date"
+                class="space-y-2"
+              >
+                <h3 class="text-xs font-semibold text-secondary/80 uppercase tracking-wide pl-1">
+                  {{ group.displayDate }}
+                </h3>
+                <TransitionGroup name="card-filter" tag="div" class="space-y-2">
+                  <MedicationCard
+                    v-for="instance in group.instances"
+                    :key="instance.id"
+                    :instance="instance"
+                    status="upcoming"
+                    compact
+                  />
+                </TransitionGroup>
+              </div>
+
+              <!-- Show More / Show Less Button -->
+              <div v-if="hasMoreUpcomingDays" class="mt-4 text-center">
+                <button
+                  class="show-more-btn"
+                  @click="upcomingDaysShowAll = !upcomingDaysShowAll"
+                >
+                  <span v-if="!upcomingDaysShowAll">
+                    Show {{ hiddenUpcomingDaysCount }} more
+                  </span>
+                  <span v-else>Show less</span>
+                  <ChevronDown
+                    class="w-4 h-4 transition-transform duration-200"
+                    :class="{ '-rotate-180': upcomingDaysShowAll }"
                   />
                 </button>
               </div>

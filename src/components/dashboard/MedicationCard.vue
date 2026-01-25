@@ -14,10 +14,16 @@ import {
   ChevronUp,
 } from 'lucide-vue-next'
 
-const props = defineProps<{
-  instance: DailyInstanceWithItem
-  status: 'overdue' | 'due' | 'snoozed' | 'upcoming' | 'confirmed'
-}>()
+const props = withDefaults(
+  defineProps<{
+    instance: DailyInstanceWithItem
+    status: 'overdue' | 'due' | 'snoozed' | 'upcoming' | 'confirmed'
+    compact?: boolean
+  }>(),
+  {
+    compact: false,
+  }
+)
 
 const emit = defineEmits<{
   confirm: []
@@ -167,36 +173,40 @@ function handleSnooze(minutes: SnoozeInterval) {
 
 <template>
   <div
-    class="card p-4 transition-all"
-    :class="{
-      'opacity-60': status === 'confirmed',
-      'border-error/50 bg-error/5': status === 'overdue',
-      'ring-2 ring-accent': status === 'due',
-    }"
+    class="card transition-all"
+    :class="[
+      compact ? 'p-3' : 'p-4',
+      {
+        'opacity-60': status === 'confirmed',
+        'border-error/50 bg-error/5': status === 'overdue',
+        'ring-2 ring-accent': status === 'due',
+        'bg-secondary/5 border-secondary/30': compact,
+      },
+    ]"
   >
     <!-- Main Row -->
-    <div class="flex items-center gap-4">
+    <div class="flex items-center" :class="compact ? 'gap-3' : 'gap-4'">
       <!-- Icon -->
       <div
-        class="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-        :class="iconBgClass"
+        class="rounded-xl flex items-center justify-center flex-shrink-0"
+        :class="[iconBgClass, compact ? 'w-9 h-9' : 'w-12 h-12']"
       >
-        <component :is="icon" class="w-6 h-6" :class="iconColorClass" />
+        <component :is="icon" :class="[iconColorClass, compact ? 'w-4 h-4' : 'w-6 h-6']" />
       </div>
 
       <!-- Content -->
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
-          <h3 class="font-bold text-foreground truncate">{{ instance.item.name }}</h3>
+          <h3 :class="['font-bold text-foreground truncate', compact ? 'text-sm' : '']">{{ instance.item.name }}</h3>
           <span v-if="status === 'confirmed'" class="text-quaternary">
             <Check class="w-4 h-4" />
           </span>
         </div>
-        <div class="flex items-center gap-2 text-sm text-muted-foreground">
+        <div v-if="!compact" class="flex items-center gap-2 text-sm text-muted-foreground">
           <span>{{ instance.item.location }}</span>
           <span v-if="instance.item.dose">· {{ instance.item.dose }}</span>
         </div>
-        <div class="text-sm text-muted-foreground mt-1">
+        <div :class="['text-muted-foreground', compact ? 'text-xs' : 'text-sm mt-1']">
           <span v-if="status === 'confirmed' && confirmedTime">
             Done at {{ confirmedTime }}
           </span>
@@ -205,13 +215,14 @@ function handleSnooze(minutes: SnoozeInterval) {
           </span>
           <span v-else>
             {{ scheduledTime }}
-            <span v-if="status !== 'upcoming'" class="text-xs ml-1">({{ relativeTime }})</span>
+            <span v-if="!compact && status !== 'upcoming'" class="text-xs ml-1">({{ relativeTime }})</span>
+            <span v-if="compact && instance.item.location" class="ml-1">· {{ instance.item.location }}</span>
           </span>
         </div>
       </div>
 
       <!-- Actions -->
-      <div class="flex items-center gap-2 flex-shrink-0">
+      <div v-if="!compact" class="flex items-center gap-2 flex-shrink-0">
         <!-- Confirm Button -->
         <button
           v-if="status !== 'confirmed' && status !== 'upcoming'"
@@ -248,7 +259,7 @@ function handleSnooze(minutes: SnoozeInterval) {
 
     <!-- Conflict Warning with Live Countdown -->
     <div
-      v-if="countdownSeconds > 0 && status !== 'confirmed'"
+      v-if="!compact && countdownSeconds > 0 && status !== 'confirmed'"
       class="mt-3 flex items-center gap-2 text-sm text-tertiary bg-tertiary/10 rounded-lg p-2"
     >
       <AlertTriangle class="w-4 h-4 flex-shrink-0" />
@@ -258,7 +269,7 @@ function handleSnooze(minutes: SnoozeInterval) {
     </div>
 
     <!-- Snooze Options -->
-    <div v-if="showSnoozeOptions" class="mt-3 flex items-center gap-2">
+    <div v-if="!compact && showSnoozeOptions" class="mt-3 flex items-center gap-2">
       <span class="text-sm text-muted-foreground">Snooze for:</span>
       <button
         class="px-3 py-1 rounded-full text-sm font-medium bg-tertiary/20 text-tertiary hover:bg-tertiary/30 transition-colors"
@@ -281,7 +292,7 @@ function handleSnooze(minutes: SnoozeInterval) {
     </div>
 
     <!-- Expanded Notes -->
-    <div v-if="isExpanded && instance.item.notes" class="mt-3 pt-3 border-t border-muted">
+    <div v-if="!compact && isExpanded && instance.item.notes" class="mt-3 pt-3 border-t border-muted">
       <p class="text-sm text-muted-foreground">{{ instance.item.notes }}</p>
     </div>
   </div>

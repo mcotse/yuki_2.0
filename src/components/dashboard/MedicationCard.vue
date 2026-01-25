@@ -10,8 +10,9 @@ import {
   Check,
   Clock,
   AlertTriangle,
-  ChevronDown,
+  Info,
   ChevronUp,
+  Undo2,
 } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -28,6 +29,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   confirm: []
   snooze: [minutes: SnoozeInterval]
+  undo: []
 }>()
 
 const instancesStore = useInstancesStore()
@@ -181,8 +183,10 @@ function handleSnooze(minutes: SnoozeInterval) {
         'border-error/50 bg-error/5': status === 'overdue',
         'ring-2 ring-accent': status === 'due',
         'bg-secondary/5 border-secondary/30': compact,
+        'cursor-pointer hover:bg-muted/30': !compact && instance.item.notes,
       },
     ]"
+    @click="!compact && instance.item.notes ? isExpanded = !isExpanded : null"
   >
     <!-- Main Row -->
     <div class="flex items-center" :class="compact ? 'gap-3' : 'gap-4'">
@@ -221,42 +225,48 @@ function handleSnooze(minutes: SnoozeInterval) {
         </div>
       </div>
 
-      <!-- Actions - Grid layout for consistent alignment -->
-      <div v-if="!compact" class="flex items-center flex-shrink-0">
-        <!-- Primary action: Confirm -->
+      <!-- Actions -->
+      <div v-if="!compact" class="flex items-center gap-1 flex-shrink-0">
+        <!-- Info/Collapse icon for cards with notes -->
         <button
-          v-if="status !== 'confirmed' && status !== 'upcoming'"
-          class="btn btn-primary py-2 px-4 text-sm mr-1"
-          :class="{ 'animate-bounce': isConfirming }"
-          :disabled="isConfirming"
-          @click="handleConfirm"
+          v-if="instance.item.notes"
+          class="w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+          @click.stop="isExpanded = !isExpanded"
+          :aria-label="isExpanded ? 'Hide details' : 'Show details'"
         >
-          <Check class="w-4 h-4" />
+          <ChevronUp v-if="isExpanded" class="w-4 h-4" />
+          <Info v-else class="w-4 h-4" />
         </button>
 
-        <!-- Secondary actions container - fixed width for alignment -->
-        <div class="flex items-center gap-0.5 w-[72px] justify-end">
-          <!-- Snooze Button -->
-          <button
-            v-if="status === 'due' || status === 'overdue'"
-            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
-            @click="showSnoozeOptions = !showSnoozeOptions"
-          >
-            <Clock class="w-[18px] h-[18px] text-muted-foreground" />
-          </button>
+        <!-- Confirm Button - compact pill style with visible check icon -->
+        <button
+          v-if="status !== 'confirmed' && status !== 'upcoming'"
+          class="w-12 h-9 p-0 rounded-full flex items-center justify-center bg-accent shadow-md hover:shadow-lg active:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+          :class="{ 'animate-bounce': isConfirming }"
+          :disabled="isConfirming"
+          @click.stop="handleConfirm"
+        >
+          <Check class="w-5 h-5 text-white" :stroke-width="2.5" />
+        </button>
 
-          <!-- Expand Button - only show if notes exist -->
-          <button
-            v-if="instance.item.notes"
-            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
-            @click="isExpanded = !isExpanded"
-          >
-            <component
-              :is="isExpanded ? ChevronUp : ChevronDown"
-              class="w-[18px] h-[18px] text-muted-foreground"
-            />
-          </button>
-        </div>
+        <!-- Snooze Button -->
+        <button
+          v-if="status === 'due' || status === 'overdue'"
+          class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+          @click.stop="showSnoozeOptions = !showSnoozeOptions"
+        >
+          <Clock class="w-[18px] h-[18px] text-muted-foreground" />
+        </button>
+
+        <!-- Undo Button for confirmed cards -->
+        <button
+          v-if="status === 'confirmed'"
+          class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+          @click.stop="emit('undo')"
+          aria-label="Undo confirmation"
+        >
+          <Undo2 class="w-[18px] h-[18px] text-muted-foreground" />
+        </button>
       </div>
     </div>
 
@@ -272,7 +282,7 @@ function handleSnooze(minutes: SnoozeInterval) {
     </div>
 
     <!-- Snooze Options -->
-    <div v-if="!compact && showSnoozeOptions" class="mt-3 flex items-center gap-2">
+    <div v-if="!compact && showSnoozeOptions" class="mt-3 flex items-center gap-2" @click.stop>
       <span class="text-sm text-muted-foreground">Snooze for:</span>
       <button
         class="px-3 py-1 rounded-full text-sm font-medium bg-tertiary/20 text-tertiary hover:bg-tertiary/30 transition-colors"

@@ -10,7 +10,7 @@ import {
   Check,
   Clock,
   AlertTriangle,
-  ChevronDown,
+  Info,
   ChevronUp,
   Undo2,
 } from 'lucide-vue-next'
@@ -183,8 +183,10 @@ function handleSnooze(minutes: SnoozeInterval) {
         'border-error/50 bg-error/5': status === 'overdue',
         'ring-2 ring-accent': status === 'due',
         'bg-secondary/5 border-secondary/30': compact,
+        'cursor-pointer hover:bg-muted/30': !compact && instance.item.notes,
       },
     ]"
+    @click="!compact && instance.item.notes ? isExpanded = !isExpanded : null"
   >
     <!-- Main Row -->
     <div class="flex items-center" :class="compact ? 'gap-3' : 'gap-4'">
@@ -225,16 +227,15 @@ function handleSnooze(minutes: SnoozeInterval) {
 
       <!-- Actions -->
       <div v-if="!compact" class="flex items-center gap-1 flex-shrink-0">
-        <!-- Expand Button - only show if notes exist -->
+        <!-- Info/Collapse icon for cards with notes -->
         <button
           v-if="instance.item.notes"
-          class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
-          @click="isExpanded = !isExpanded"
+          class="w-6 h-6 flex items-center justify-center rounded-full text-muted-foreground/40 hover:text-muted-foreground/70 transition-colors"
+          @click.stop="isExpanded = !isExpanded"
+          :aria-label="isExpanded ? 'Hide details' : 'Show details'"
         >
-          <component
-            :is="isExpanded ? ChevronUp : ChevronDown"
-            class="w-[18px] h-[18px] text-muted-foreground"
-          />
+          <ChevronUp v-if="isExpanded" class="w-4 h-4" />
+          <Info v-else class="w-4 h-4" />
         </button>
 
         <!-- Confirm Button - compact pill style with visible check icon -->

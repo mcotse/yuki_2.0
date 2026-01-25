@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   ChevronDown,
   ChevronUp,
+  Undo2,
 } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -28,6 +29,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   confirm: []
   snooze: [minutes: SnoozeInterval]
+  undo: []
 }>()
 
 const instancesStore = useInstancesStore()
@@ -255,6 +257,16 @@ function handleSnooze(minutes: SnoozeInterval) {
               :is="isExpanded ? ChevronUp : ChevronDown"
               class="w-[18px] h-[18px] text-muted-foreground"
             />
+          </button>
+
+          <!-- Undo Button for confirmed cards -->
+          <button
+            v-if="status === 'confirmed'"
+            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+            @click="emit('undo')"
+            aria-label="Undo confirmation"
+          >
+            <Undo2 class="w-[18px] h-[18px] text-muted-foreground" />
           </button>
         </div>
       </div>

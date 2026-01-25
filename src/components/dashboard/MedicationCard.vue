@@ -133,7 +133,7 @@ const iconColorClass = computed(() => {
     case 'overdue':
       return 'text-error'
     case 'due':
-      return 'bg-accent'
+      return 'text-accent'
     case 'snoozed':
       return 'text-tertiary'
     case 'confirmed':
@@ -198,15 +198,15 @@ function handleSnooze(minutes: SnoozeInterval) {
       <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
           <h3 :class="['font-bold text-foreground truncate', compact ? 'text-sm' : '']">{{ instance.item.name }}</h3>
-          <span v-if="status === 'confirmed'" class="text-quaternary">
+          <span v-if="status === 'confirmed'" class="text-quaternary flex-shrink-0">
             <Check class="w-4 h-4" />
           </span>
         </div>
-        <div v-if="!compact" class="flex items-center gap-2 text-sm text-muted-foreground">
-          <span>{{ instance.item.location }}</span>
-          <span v-if="instance.item.dose">· {{ instance.item.dose }}</span>
+        <div v-if="!compact && (instance.item.location || instance.item.dose)" class="text-sm text-muted-foreground truncate">
+          <span v-if="instance.item.location">{{ instance.item.location }}</span>
+          <span v-if="instance.item.dose">{{ instance.item.location ? ' · ' : '' }}{{ instance.item.dose }}</span>
         </div>
-        <div :class="['text-muted-foreground', compact ? 'text-xs' : 'text-sm mt-1']">
+        <div :class="['text-muted-foreground', compact ? 'text-xs' : 'text-sm mt-0.5']">
           <span v-if="status === 'confirmed' && confirmedTime">
             Done at {{ confirmedTime }}
           </span>
@@ -215,18 +215,18 @@ function handleSnooze(minutes: SnoozeInterval) {
           </span>
           <span v-else>
             {{ scheduledTime }}
-            <span v-if="!compact && status !== 'upcoming'" class="text-xs ml-1">({{ relativeTime }})</span>
+            <span v-if="!compact && status !== 'upcoming'" class="text-xs ml-1 text-muted-foreground/70">({{ relativeTime }})</span>
             <span v-if="compact && instance.item.location" class="ml-1">· {{ instance.item.location }}</span>
           </span>
         </div>
       </div>
 
-      <!-- Actions -->
-      <div v-if="!compact" class="flex items-center gap-2 flex-shrink-0">
-        <!-- Confirm Button -->
+      <!-- Actions - Grid layout for consistent alignment -->
+      <div v-if="!compact" class="flex items-center flex-shrink-0">
+        <!-- Primary action: Confirm -->
         <button
           v-if="status !== 'confirmed' && status !== 'upcoming'"
-          class="btn btn-primary py-2 px-4 text-sm"
+          class="btn btn-primary py-2 px-4 text-sm mr-1"
           :class="{ 'animate-bounce': isConfirming }"
           :disabled="isConfirming"
           @click="handleConfirm"
@@ -234,26 +234,29 @@ function handleSnooze(minutes: SnoozeInterval) {
           <Check class="w-4 h-4" />
         </button>
 
-        <!-- Snooze Button -->
-        <button
-          v-if="status === 'due' || status === 'overdue'"
-          class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
-          @click="showSnoozeOptions = !showSnoozeOptions"
-        >
-          <Clock class="w-5 h-5 text-muted-foreground" />
-        </button>
+        <!-- Secondary actions container - fixed width for alignment -->
+        <div class="flex items-center gap-0.5 w-[72px] justify-end">
+          <!-- Snooze Button -->
+          <button
+            v-if="status === 'due' || status === 'overdue'"
+            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+            @click="showSnoozeOptions = !showSnoozeOptions"
+          >
+            <Clock class="w-[18px] h-[18px] text-muted-foreground" />
+          </button>
 
-        <!-- Expand Button -->
-        <button
-          v-if="instance.item.notes"
-          class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
-          @click="isExpanded = !isExpanded"
-        >
-          <component
-            :is="isExpanded ? ChevronUp : ChevronDown"
-            class="w-5 h-5 text-muted-foreground"
-          />
-        </button>
+          <!-- Expand Button - only show if notes exist -->
+          <button
+            v-if="instance.item.notes"
+            class="w-8 h-8 flex items-center justify-center rounded-full hover:bg-muted/50 transition-colors"
+            @click="isExpanded = !isExpanded"
+          >
+            <component
+              :is="isExpanded ? ChevronUp : ChevronDown"
+              class="w-[18px] h-[18px] text-muted-foreground"
+            />
+          </button>
+        </div>
       </div>
     </div>
 

@@ -17,7 +17,8 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix --cache",
-    "format": "prettier --write --experimental-cli src/"
+    "format": "prettier --write --experimental-cli src/",
+    "seed:firebase": "npx tsx scripts/seed-firebase.ts"
   },
   "dependencies": {
     "@fontsource-variable/outfit": "^5.2.8",
@@ -31,6 +32,7 @@
     "vue-router": "^4.6.4"
   },
   "devDependencies": {
+    "firebase-admin": "^13.0.2",
     "@playwright/test": "^1.57.0",
     "@tailwindcss/vite": "^4.1.18",
     "@tsconfig/node24": "^24.0.3",

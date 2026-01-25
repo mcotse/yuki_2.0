@@ -5,6 +5,7 @@ import { useItemsStore } from '@/stores/items'
 import { useInstancesStore } from '@/stores/instances'
 import { generateInstancesForDate } from '@/services/instanceGenerator'
 import { getToday, formatFutureDisplayDate } from '@/utils/date'
+import { isFirebaseConfigured } from '@/lib/firebase'
 import MedicationCard from '@/components/dashboard/MedicationCard.vue'
 import QuickLogCard from '@/components/dashboard/QuickLogCard.vue'
 import { RefreshCw, AlertCircle, ChevronDown, Droplet, Pill, Leaf, Utensils, X, Filter, Calendar } from 'lucide-vue-next'
@@ -135,20 +136,22 @@ function toggleFilter(filterId: string) {
 }
 
 async function loadDashboard() {
-  // Load items first
-  if (itemsStore.items.length === 0) {
-    await itemsStore.fetchItems()
+  // Always fetch items to ensure fresh data on page load
+  await itemsStore.fetchItems()
+
+  const today = getToday()
+
+  // Only use external instance generator when Firebase is configured
+  // localStorage mode handles instance generation in fetchInstancesForDate
+  if (isFirebaseConfigured()) {
+    await generateInstancesForDate(today, itemsStore.items)
   }
 
-  // Generate instances for today if needed
-  const today = getToday()
-  await generateInstancesForDate(today, itemsStore.items)
-
-  // Fetch instances for today
+  // Fetch instances for today (this also generates instances for localStorage mode)
   await instancesStore.fetchInstancesForDate(today)
 
   // Fetch upcoming days instances (next 3 days)
-  instancesStore.fetchUpcomingDaysInstances(3)
+  await instancesStore.fetchUpcomingDaysInstances(3)
 }
 
 async function refreshDashboard() {

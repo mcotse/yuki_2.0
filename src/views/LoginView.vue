@@ -83,11 +83,6 @@ async function handleLogin() {
           </button>
         </form>
       </div>
-
-      <!-- Hint -->
-      <p class="text-center text-muted-foreground text-sm mt-6">
-        Hint: Use your assigned password
-      </p>
     </div>
   </main>
 </template>

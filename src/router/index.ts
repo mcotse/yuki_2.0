@@ -26,7 +26,7 @@ const router = createRouter({
       path: '/medications',
       name: 'medications',
       component: () => import('@/views/MedicationsView.vue'),
-      meta: { title: 'Manage Medications', requiresAuth: true, requiresAdmin: true },
+      meta: { title: 'Manage Reminders', requiresAuth: true, requiresAdmin: true },
     },
     {
       path: '/login',
@@ -38,7 +38,7 @@ const router = createRouter({
       path: '/admin/medications',
       name: 'admin-medications',
       component: () => import('@/views/AdminMedicationsView.vue'),
-      meta: { title: 'Manage Medications', requiresAuth: true, requiresAdmin: true },
+      meta: { title: 'Manage Reminders', requiresAuth: true, requiresAdmin: true },
     },
     // Catch-all redirect to dashboard
     {

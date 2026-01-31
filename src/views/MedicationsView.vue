@@ -236,7 +236,7 @@ onMounted(async () => {
       >
         <ArrowLeft class="w-5 h-5 text-foreground" />
       </button>
-      <h1 class="text-2xl font-bold text-foreground flex-1">Manage Medications</h1>
+      <h1 class="text-2xl font-bold text-foreground flex-1">Manage Reminders</h1>
       <button
         class="btn btn-primary py-2 px-3"
         @click="openAddModal"
@@ -266,7 +266,7 @@ onMounted(async () => {
     <!-- Loading State -->
     <div v-if="itemsStore.isLoading" class="py-12 text-center">
       <RefreshCw class="w-8 h-8 mx-auto text-accent animate-spin mb-4" />
-      <p class="text-muted-foreground">Loading medications...</p>
+      <p class="text-muted-foreground">Loading items...</p>
     </div>
 
     <!-- Medication Lists -->
@@ -446,7 +446,7 @@ onMounted(async () => {
           {{ showArchived ? 'No archived items' : 'No active items' }}
         </h2>
         <p class="text-muted-foreground mb-4">
-          {{ showArchived ? 'Archived medications will appear here.' : 'Add a medication to get started.' }}
+          {{ showArchived ? 'Archived items will appear here.' : 'Add an item to get started.' }}
         </p>
         <button
           v-if="!showArchived"
@@ -454,7 +454,7 @@ onMounted(async () => {
           @click="openAddModal"
         >
           <Plus class="w-5 h-5 mr-2" />
-          Add Medication
+          Add Item
         </button>
       </div>
     </div>
@@ -469,7 +469,7 @@ onMounted(async () => {
         <div class="bg-card rounded-t-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
           <div class="flex items-center justify-between mb-6">
             <h2 class="text-xl font-bold text-foreground">
-              {{ editingItem ? 'Edit Medication' : 'Add Medication' }}
+              {{ editingItem ? 'Edit Item' : 'Add Item' }}
             </h2>
             <button
               class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
@@ -635,7 +635,7 @@ onMounted(async () => {
                 :disabled="isSaving || !formData.name.trim()"
               >
                 <RefreshCw v-if="isSaving" class="w-5 h-5 animate-spin mx-auto" />
-                <span v-else>{{ editingItem ? 'Save Changes' : 'Add Medication' }}</span>
+                <span v-else>{{ editingItem ? 'Save Changes' : 'Add Item' }}</span>
               </button>
             </div>
           </form>

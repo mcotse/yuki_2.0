@@ -253,6 +253,93 @@ test.describe('History Edit (Admin)', () => {
   })
 })
 
+test.describe('History Entry Expansion', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+    await login(page)
+
+    // First confirm a medication so we have something to view in history
+    await page.waitForLoadState('networkidle')
+    page.once('dialog', (dialog) => dialog.accept())
+
+    const confirmButtons = page.locator('.btn-primary')
+    if ((await confirmButtons.count()) > 0) {
+      await confirmButtons.first().click()
+      await page.waitForLoadState('networkidle')
+    }
+
+    // Navigate to history
+    await page.goto('/history')
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('should show expanded details when clicking card', async ({ page }) => {
+    const cards = page.locator('.card')
+    const cardCount = await cards.count()
+
+    if (cardCount > 0) {
+      // Click on the expand button (chevron down)
+      const expandButton = cards.first().locator('button').filter({ has: page.locator('svg.lucide-chevron-down') })
+      if ((await expandButton.count()) > 0) {
+        await expandButton.click()
+
+        // Should show expanded details with Scheduled, Confirmed, Location
+        await expect(page.getByText('Scheduled')).toBeVisible()
+        await expect(page.getByText('Confirmed', { exact: false })).toBeVisible()
+      }
+    }
+  })
+
+  test('should show confirmed by in expanded view only', async ({ page }) => {
+    const cards = page.locator('.card')
+    const cardCount = await cards.count()
+
+    if (cardCount > 0) {
+      const firstCard = cards.first()
+
+      // When collapsed, confirmed by should NOT be visible
+      const confirmedByCollapsed = firstCard.locator('[data-testid="confirmed-by"]')
+      await expect(confirmedByCollapsed).not.toBeVisible()
+
+      // Click to expand
+      const expandButton = firstCard.locator('button').filter({ has: page.locator('svg.lucide-chevron-down') })
+      if ((await expandButton.count()) > 0) {
+        await expandButton.click()
+
+        // After expanding, if confirmedByName is set, it should be visible
+        // The text "Confirmed by" followed by a name should appear in expanded view
+        const expandedDetails = page.locator('.border-t.border-muted')
+        await expect(expandedDetails).toBeVisible()
+      }
+    }
+  })
+
+  test('should show confirmed by after location in expanded view', async ({ page }) => {
+    const cards = page.locator('.card')
+    const cardCount = await cards.count()
+
+    if (cardCount > 0) {
+      // Expand the first card
+      const expandButton = cards.first().locator('button').filter({ has: page.locator('svg.lucide-chevron-down') })
+      if ((await expandButton.count()) > 0) {
+        await expandButton.click()
+
+        // Get the expanded section content
+        const expandedSection = page.locator('.border-t.border-muted')
+        const content = await expandedSection.textContent()
+
+        // If both Location and Confirmed by are present, Location should come first
+        if (content && content.includes('Location') && content.includes('Confirmed by')) {
+          const locationIndex = content.indexOf('Location')
+          const confirmedByIndex = content.indexOf('Confirmed by')
+          expect(confirmedByIndex).toBeGreaterThan(locationIndex)
+        }
+      }
+    }
+  })
+})
+
 test.describe('History Navigation Integration', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')

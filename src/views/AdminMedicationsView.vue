@@ -211,7 +211,7 @@ onMounted(() => {
         <ArrowLeft class="w-5 h-5 text-foreground" />
       </button>
       <div class="flex-1">
-        <h1 class="text-2xl font-bold text-foreground">Manage Medications</h1>
+        <h1 class="text-2xl font-bold text-foreground">Manage Reminders</h1>
         <p class="text-sm text-muted-foreground">
           {{ activeCount }} active, {{ inactiveCount }} inactive
         </p>
@@ -250,7 +250,7 @@ onMounted(() => {
     <!-- Loading State -->
     <div v-if="itemsStore.isLoading" class="py-12 text-center">
       <RefreshCw class="w-8 h-8 mx-auto text-accent animate-spin mb-4" />
-      <p class="text-muted-foreground">Loading medications...</p>
+      <p class="text-muted-foreground">Loading items...</p>
     </div>
 
     <!-- Items List -->
@@ -340,16 +340,16 @@ onMounted(() => {
       <div class="w-16 h-16 mx-auto mb-4 bg-muted rounded-full flex items-center justify-center">
         <Pill class="w-8 h-8 text-muted-foreground" />
       </div>
-      <h2 class="text-lg font-semibold text-foreground mb-2">No medications</h2>
+      <h2 class="text-lg font-semibold text-foreground mb-2">No items</h2>
       <p class="text-muted-foreground mb-4">
-        Add your first medication to get started.
+        Add your first item to get started.
       </p>
       <button
         class="btn btn-primary"
         @click="openAddModal"
       >
         <Plus class="w-4 h-4" />
-        Add Medication
+        Add Item
       </button>
     </div>
 
@@ -363,7 +363,7 @@ onMounted(() => {
         <div class="bg-card rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-lg font-semibold text-foreground">
-              {{ editingItem ? 'Edit Medication' : 'Add Medication' }}
+              {{ editingItem ? 'Edit Item' : 'Add Item' }}
             </h2>
             <button
               class="p-1 rounded-lg hover:bg-muted/50 transition-colors"

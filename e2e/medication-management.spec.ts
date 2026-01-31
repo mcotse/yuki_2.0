@@ -15,7 +15,7 @@ async function loginAsAdmin(page: Page) {
 async function navigateToMedicationManagement(page: Page) {
   await page.getByRole('button', { name: /settings/i }).click()
   await expect(page).toHaveURL('/settings')
-  await page.getByText('Manage Medications').click()
+  await page.getByText('Manage Reminders').click()
   await expect(page).toHaveURL('/admin/medications')
 }
 
@@ -30,7 +30,7 @@ test.describe('Medication Management - Access Control', () => {
     await navigateToMedicationManagement(page)
 
     // Should see the page header
-    await expect(page.getByRole('heading', { name: 'Manage Medications' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Manage Reminders' })).toBeVisible()
 
     // Should see Add button
     await expect(page.getByRole('button', { name: /add/i })).toBeVisible()
@@ -98,7 +98,7 @@ test.describe('Medication Management - View Medications', () => {
 
   test('back button navigates to settings', async ({ page }) => {
     // Wait for page to load
-    await expect(page.getByRole('heading', { name: 'Manage Medications' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Manage Reminders' })).toBeVisible()
 
     // Click back button
     await page.locator('button').filter({ has: page.locator('svg.lucide-arrow-left') }).click()
@@ -120,7 +120,7 @@ test.describe('Medication Management - Add Medication', () => {
     await page.getByRole('button', { name: /add/i }).click()
 
     // Modal should appear
-    await expect(page.getByRole('heading', { name: 'Add Medication' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible()
 
     // Form fields should be present
     await expect(page.getByPlaceholder('e.g., Ofloxacin 0.3%')).toBeVisible()
@@ -129,20 +129,20 @@ test.describe('Medication Management - Add Medication', () => {
 
   test('can close add modal with Cancel', async ({ page }) => {
     await page.getByRole('button', { name: /add/i }).click()
-    await expect(page.getByRole('heading', { name: 'Add Medication' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible()
 
     await page.getByRole('button', { name: 'Cancel' }).click()
 
-    await expect(page.getByRole('heading', { name: 'Add Medication' })).not.toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Add Item' })).not.toBeVisible()
   })
 
   test('can close add modal with X button', async ({ page }) => {
     await page.getByRole('button', { name: /add/i }).click()
-    await expect(page.getByRole('heading', { name: 'Add Medication' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible()
 
     await page.locator('button').filter({ has: page.locator('svg.lucide-x') }).click()
 
-    await expect(page.getByRole('heading', { name: 'Add Medication' })).not.toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Add Item' })).not.toBeVisible()
   })
 
   test('validates required name field', async ({ page }) => {
@@ -161,7 +161,7 @@ test.describe('Medication Management - Add Medication', () => {
 
     // Click the Add button in the header
     await page.locator('button').filter({ hasText: /Add/ }).first().click()
-    await expect(page.getByRole('heading', { name: 'Add Medication' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible()
 
     // Locate the modal form
     const modal = page.locator('[role="dialog"], .fixed.inset-0').first()
@@ -184,7 +184,7 @@ test.describe('Medication Management - Add Medication', () => {
     await submitButton.click()
 
     // Modal should close
-    await expect(page.getByRole('heading', { name: 'Add Medication' })).not.toBeVisible({ timeout: 15000 })
+    await expect(page.getByRole('heading', { name: 'Add Item' })).not.toBeVisible({ timeout: 15000 })
 
     // New medication should appear in list
     await page.waitForLoadState('networkidle')
@@ -212,7 +212,7 @@ test.describe('Medication Management - Edit Medication', () => {
     await editButton.click()
 
     // Edit modal should appear
-    await expect(page.getByRole('heading', { name: 'Edit Medication' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Edit Item' })).toBeVisible()
   })
 
   test('edit modal is pre-filled with medication data', async ({ page }) => {
@@ -241,7 +241,7 @@ test.describe('Medication Management - Edit Medication', () => {
     const firstCard = page.locator('.card').first()
     await firstCard.getByTitle('Edit').click()
 
-    await expect(page.getByRole('heading', { name: 'Edit Medication' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Edit Item' })).toBeVisible()
 
     // Update name
     const nameInput = page.getByPlaceholder('e.g., Ofloxacin 0.3%')
@@ -253,7 +253,7 @@ test.describe('Medication Management - Edit Medication', () => {
     await page.getByRole('button', { name: 'Save' }).click()
 
     // Modal should close and name should be updated
-    await expect(page.getByRole('heading', { name: 'Edit Medication' })).not.toBeVisible({ timeout: 10000 })
+    await expect(page.getByRole('heading', { name: 'Edit Item' })).not.toBeVisible({ timeout: 10000 })
     await expect(page.getByText(updatedName)).toBeVisible()
 
     // Restore original name

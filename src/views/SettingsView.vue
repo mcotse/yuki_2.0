@@ -56,8 +56,8 @@ function handleLogout() {
             <Pill class="w-5 h-5 text-secondary" />
           </div>
           <div class="flex-1">
-            <div class="font-medium text-foreground">Manage Medications</div>
-            <div class="text-sm text-muted-foreground">Add, edit, or deactivate medications</div>
+            <div class="font-medium text-foreground">Manage Reminders</div>
+            <div class="text-sm text-muted-foreground">Add, edit, or deactivate reminders</div>
           </div>
         </button>
       </div>

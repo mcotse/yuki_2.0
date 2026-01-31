@@ -56,12 +56,12 @@ test.describe('Admin Settings Page', () => {
     await expect(page.locator('svg.lucide-shield')).toBeVisible()
   })
 
-  test('should show Admin section with Manage Medications for admin', async ({ page }) => {
+  test('should show Admin section with Manage Reminders for admin', async ({ page }) => {
     await page.getByRole('button', { name: /settings/i }).click()
 
     // Admin section should be visible
-    await expect(page.getByText('Manage Medications')).toBeVisible()
-    await expect(page.getByText('Add, edit, or deactivate medications')).toBeVisible()
+    await expect(page.getByText('Manage Reminders')).toBeVisible()
+    await expect(page.getByText('Add, edit, or deactivate reminders')).toBeVisible()
   })
 
   test('should show Log Out button', async ({ page }) => {

@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import type { HistoryEntry as HistoryEntryType } from '@/stores/history'
 import { useAuthStore } from '@/stores/auth'
 import { formatTime } from '@/utils/date'
-import { Clock, User, Edit2, Check, ChevronDown, ChevronUp } from 'lucide-vue-next'
+import { Clock, Edit2, Check, ChevronDown, ChevronUp } from 'lucide-vue-next'
 
 const props = defineProps<{
   entry: HistoryEntryType
@@ -92,10 +92,6 @@ function handleEdit() {
               <Clock class="w-3.5 h-3.5" />
               {{ formatTime(entry.confirmedAt) }}
             </span>
-            <span v-if="entry.confirmedByName" class="flex items-center gap-1">
-              <User class="w-3.5 h-3.5" />
-              {{ entry.confirmedByName }}
-            </span>
           </div>
 
           <!-- Ad-hoc Badge -->
@@ -128,16 +124,16 @@ function handleEdit() {
           </span>
         </div>
 
-        <!-- Confirmed By -->
-        <div v-if="entry.confirmedByName" class="flex justify-between">
-          <span class="text-muted-foreground">Confirmed by</span>
-          <span class="text-foreground">{{ entry.confirmedByName }}</span>
-        </div>
-
         <!-- Location -->
         <div v-if="entry.instance.item.location" class="flex justify-between">
           <span class="text-muted-foreground">Location</span>
           <span class="text-foreground">{{ entry.instance.item.location }}</span>
+        </div>
+
+        <!-- Confirmed By -->
+        <div v-if="entry.confirmedByName" class="flex justify-between" data-testid="confirmed-by">
+          <span class="text-muted-foreground">Confirmed by</span>
+          <span class="text-foreground">{{ entry.confirmedByName }}</span>
         </div>
 
         <!-- Notes -->

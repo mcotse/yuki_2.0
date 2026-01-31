@@ -4,6 +4,7 @@ import {
   collection,
   getDocs,
   doc,
+  getDoc,
   updateDoc,
   query,
   where,
@@ -35,6 +36,12 @@ export const useHistoryStore = defineStore('history', () => {
   const itemsStore = useItemsStore()
 
   // Helper to convert Firestore doc to DailyInstance
+  // Local users for development/testing when Firebase is not configured
+  const LOCAL_USERS: Record<string, string> = {
+    'local-admin-uuid': 'Matthew',
+    'local-user-uuid': 'Caretaker',
+  }
+
   function docToInstance(docData: DocumentData, id: string): DailyInstance {
     return {
       id,
@@ -51,6 +58,46 @@ export const useHistoryStore = defineStore('history', () => {
       created_at: docData.created_at?.toDate?.()?.toISOString() || new Date().toISOString(),
       updated_at: docData.updated_at?.toDate?.()?.toISOString() || new Date().toISOString(),
     }
+  }
+
+  // Helper to fetch user display names from Firestore
+  async function fetchUserDisplayNames(userIds: string[]): Promise<Map<string, string>> {
+    const userNames = new Map<string, string>()
+
+    // Nothing to look up
+    if (userIds.length === 0) return userNames
+
+    // Use local users for development when Firebase is not configured
+    if (!db) {
+      for (const userId of userIds) {
+        const localName = LOCAL_USERS[userId]
+        if (localName) {
+          userNames.set(userId, localName)
+        }
+      }
+      return userNames
+    }
+
+    // Capture db in local variable for type narrowing
+    const firestore = db
+
+    // Fetch each user document
+    const uniqueIds = [...new Set(userIds)]
+    await Promise.all(
+      uniqueIds.map(async (userId) => {
+        try {
+          const userDoc = await getDoc(doc(firestore, COLLECTIONS.USERS, userId))
+          if (userDoc.exists()) {
+            const data = userDoc.data()
+            userNames.set(userId, data.display_name || data.username || 'Unknown')
+          }
+        } catch (e) {
+          console.error(`Error fetching user ${userId}:`, e)
+        }
+      })
+    )
+
+    return userNames
   }
 
   // Getters
@@ -76,6 +123,12 @@ export const useHistoryStore = defineStore('history', () => {
       if (!db) {
         const instanceRows = localData.getConfirmedInstancesForDate(date)
 
+        // Collect user IDs to look up
+        const userIds = instanceRows
+          .map((i) => i.confirmed_by)
+          .filter((id): id is string => id !== null)
+        const userNames = await fetchUserDisplayNames(userIds)
+
         // Build history entries
         const historyEntries: HistoryEntry[] = []
         for (const instance of instanceRows) {
@@ -84,7 +137,7 @@ export const useHistoryStore = defineStore('history', () => {
             historyEntries.push({
               instance: { ...instance, item },
               confirmedAt: new Date(instance.confirmed_at!),
-              confirmedByName: null,
+              confirmedByName: instance.confirmed_by ? userNames.get(instance.confirmed_by) || null : null,
             })
           }
         }
@@ -103,7 +156,13 @@ export const useHistoryStore = defineStore('history', () => {
       )
       const snapshot = await getDocs(q)
 
-      const instanceRows = snapshot.docs.map((doc) => docToInstance(doc.data(), doc.id))
+      const instanceRows = snapshot.docs.map((docSnap) => docToInstance(docSnap.data(), docSnap.id))
+
+      // Collect user IDs to look up
+      const userIds = instanceRows
+        .map((i) => i.confirmed_by)
+        .filter((id): id is string => id !== null)
+      const userNames = await fetchUserDisplayNames(userIds)
 
       // Build history entries
       const historyEntries: HistoryEntry[] = []
@@ -113,7 +172,7 @@ export const useHistoryStore = defineStore('history', () => {
           historyEntries.push({
             instance: { ...instance, item },
             confirmedAt: new Date(instance.confirmed_at!),
-            confirmedByName: null, // TODO: fetch user names if needed
+            confirmedByName: instance.confirmed_by ? userNames.get(instance.confirmed_by) || null : null,
           })
         }
       }

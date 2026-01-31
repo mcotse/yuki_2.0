@@ -92,11 +92,21 @@ const createMockInstance = (id: string): DailyInstanceWithItem => ({
   item: createMockItem(),
 })
 
-const createMockHistoryEntry = (id: string, confirmedAt: Date): HistoryEntry => ({
-  instance: createMockInstance(id),
-  confirmedAt,
-  confirmedByName: null,
-})
+const createMockHistoryEntry = (
+  id: string,
+  confirmedAt: Date,
+  options?: { confirmedBy?: string; confirmedByName?: string }
+): HistoryEntry => {
+  const instance = createMockInstance(id)
+  if (options?.confirmedBy) {
+    instance.confirmed_by = options.confirmedBy
+  }
+  return {
+    instance,
+    confirmedAt,
+    confirmedByName: options?.confirmedByName ?? null,
+  }
+}
 
 describe('history store', () => {
   beforeEach(() => {
@@ -171,6 +181,45 @@ describe('history store', () => {
       expect(store.selectedDate).toBe('2024-01-15') // Today
       expect(store.isLoading).toBe(false)
       expect(store.error).toBeNull()
+    })
+  })
+
+  describe('confirmedByName', () => {
+    it('entries can have confirmedByName set', () => {
+      const store = useHistoryStore()
+      store.entries = [
+        createMockHistoryEntry('inst-1', new Date(), {
+          confirmedBy: 'user-123',
+          confirmedByName: 'Matthew',
+        }),
+      ]
+
+      expect(store.entries[0]?.confirmedByName).toBe('Matthew')
+      expect(store.entries[0]?.instance.confirmed_by).toBe('user-123')
+    })
+
+    it('entries without confirmed_by have null confirmedByName', () => {
+      const store = useHistoryStore()
+      store.entries = [createMockHistoryEntry('inst-1', new Date())]
+
+      expect(store.entries[0]?.confirmedByName).toBeNull()
+      expect(store.entries[0]?.instance.confirmed_by).toBeNull()
+    })
+
+    it('entriesByTime preserves confirmedByName', () => {
+      const store = useHistoryStore()
+      store.entries = [
+        createMockHistoryEntry('inst-1', new Date('2024-01-15T08:00:00Z'), {
+          confirmedByName: 'Alice',
+        }),
+        createMockHistoryEntry('inst-2', new Date('2024-01-15T10:00:00Z'), {
+          confirmedByName: 'Bob',
+        }),
+      ]
+
+      const sorted = store.entriesByTime
+      expect(sorted[0]?.confirmedByName).toBe('Bob') // Latest first
+      expect(sorted[1]?.confirmedByName).toBe('Alice')
     })
   })
 })

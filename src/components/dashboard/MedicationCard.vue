@@ -27,7 +27,7 @@ const props = withDefaults(
 )
 
 const emit = defineEmits<{
-  confirm: []
+  confirm: [overrideConflict?: boolean]
   snooze: [minutes: SnoozeInterval]
   undo: []
 }>()
@@ -151,16 +151,18 @@ async function handleConfirm() {
   if (isConfirming.value) return
 
   // Check for conflict
+  let overrideConflict = false
   if (conflict.value.hasConflict) {
     // Show warning but still allow override
     const confirmed = window.confirm(
       `${conflict.value.conflictingItemName} was just given. Wait ${conflict.value.remainingSeconds}s or confirm anyway?`,
     )
     if (!confirmed) return
+    overrideConflict = true
   }
 
   isConfirming.value = true
-  emit('confirm')
+  emit('confirm', overrideConflict)
   // Reset after animation
   setTimeout(() => {
     isConfirming.value = false

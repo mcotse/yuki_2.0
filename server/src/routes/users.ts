@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { executeQuery, executeStatement } from '../db.js'
 import { v4 as uuidv4 } from 'uuid'
+import { logger } from '../lib/logger.js'
 
 const router = Router()
 
@@ -67,6 +68,14 @@ router.post('/', async (req, res, next) => {
        VALUES (:id, :username, :password_hash, :display_name, :role)`,
       { id, username, password_hash, display_name, role }
     )
+
+    logger.info({
+      event: 'user_created',
+      user_id: id,
+      username,
+      role,
+      request_id: req.id,
+    })
 
     res.status(201).json({ id, username, display_name, role })
   } catch (error) {

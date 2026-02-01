@@ -2,6 +2,8 @@ import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
 import { initializePool, closePool } from './db.js'
+import { logger } from './lib/logger.js'
+import { requestLogger } from './middleware/requestLogger.js'
 import usersRouter from './routes/users.js'
 import petsRouter from './routes/pets.js'
 import itemsRouter from './routes/items.js'
@@ -18,6 +20,7 @@ app.use(cors({
   origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
   credentials: true,
 }))
+app.use(requestLogger)
 app.use(express.json())
 
 // Health check
@@ -37,8 +40,17 @@ app.use('/api/test-fixtures', testFixturesRouter)
 
 // Error handler
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Error:', err)
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const requestId = req.id || 'unknown'
+  logger.error({
+    event: 'request_error',
+    request_id: requestId,
+    error: {
+      message: err.message,
+      name: err.name,
+      stack: err.stack,
+    },
+  })
   res.status(500).json({ error: err.message })
 })
 
@@ -46,22 +58,22 @@ async function start() {
   try {
     await initializePool()
     app.listen(port, () => {
-      console.log(`Server running on http://localhost:${port}`)
+      logger.info({ event: 'server_started', port }, `Server running on http://localhost:${port}`)
     })
   } catch (error) {
-    console.error('Failed to start server:', error)
+    logger.fatal({ event: 'server_start_failed', error }, 'Failed to start server')
     process.exit(1)
   }
 }
 
 process.on('SIGTERM', async () => {
-  console.log('Shutting down...')
+  logger.info({ event: 'server_shutdown', signal: 'SIGTERM' }, 'Shutting down...')
   await closePool()
   process.exit(0)
 })
 
 process.on('SIGINT', async () => {
-  console.log('Shutting down...')
+  logger.info({ event: 'server_shutdown', signal: 'SIGINT' }, 'Shutting down...')
   await closePool()
   process.exit(0)
 })

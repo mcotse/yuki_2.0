@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { executeQuery, executeStatement } from '../db.js'
 import { v4 as uuidv4 } from 'uuid'
+import { logger } from '../lib/logger.js'
 
 const router = Router()
 
@@ -103,6 +104,15 @@ router.post('/', async (req, res, next) => {
       }
     )
 
+    logger.info({
+      event: 'history_entry_created',
+      history_id: id,
+      instance_id,
+      version,
+      confirmed_by: confirmed_by || null,
+      request_id: req.id,
+    })
+
     res.status(201).json({ id, instance_id, version, confirmed_at })
   } catch (error) {
     next(error)
@@ -141,6 +151,14 @@ router.patch('/:id', async (req, res, next) => {
       `UPDATE confirmation_history SET ${updates.join(', ')} WHERE id = :id`,
       binds
     )
+
+    logger.info({
+      event: 'confirmation_edited',
+      history_id: req.params.id,
+      edited_by: edited_by || null,
+      changes: Object.keys(req.body).filter(k => k !== 'id'),
+      request_id: req.id,
+    })
 
     res.json({ success: true })
   } catch (error) {

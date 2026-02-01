@@ -1,4 +1,5 @@
 import oracledb from 'oracledb'
+import { logger } from './lib/logger.js'
 
 // Fetch CLOBs as strings to avoid circular reference issues
 oracledb.fetchAsString = [oracledb.CLOB]
@@ -19,7 +20,7 @@ export async function initializePool(): Promise<void> {
     queueTimeout: 120000,
   })
 
-  console.log('Oracle connection pool initialized (TLS mode)')
+  logger.info({ event: 'db_pool_initialized', pool_min: 1, pool_max: 5 }, 'Oracle connection pool initialized (TLS mode)')
 }
 
 export async function getConnection(): Promise<oracledb.Connection> {
@@ -33,7 +34,7 @@ export async function closePool(): Promise<void> {
   if (pool) {
     await pool.close(0)
     pool = null
-    console.log('Oracle connection pool closed')
+    logger.info({ event: 'db_pool_closed' }, 'Oracle connection pool closed')
   }
 }
 
@@ -43,13 +44,20 @@ export async function executeQuery<T>(
   options: oracledb.ExecuteOptions = {}
 ): Promise<T[]> {
   const connection = await getConnection()
+  const startTime = Date.now()
   try {
     const result = await connection.execute(sql, binds, {
       outFormat: oracledb.OUT_FORMAT_OBJECT,
       autoCommit: true,
       ...options,
     })
+    const duration = Date.now() - startTime
+    logger.debug({ event: 'db_query_executed', duration_ms: duration, row_count: result.rows?.length ?? 0 })
     return (result.rows || []) as T[]
+  } catch (error) {
+    const duration = Date.now() - startTime
+    logger.error({ event: 'db_query_failed', duration_ms: duration, sql: sql.substring(0, 200), error })
+    throw error
   } finally {
     await connection.close()
   }
@@ -60,9 +68,16 @@ export async function executeStatement(
   binds: oracledb.BindParameters = {}
 ): Promise<oracledb.Result<unknown>> {
   const connection = await getConnection()
+  const startTime = Date.now()
   try {
     const result = await connection.execute(sql, binds, { autoCommit: true })
+    const duration = Date.now() - startTime
+    logger.debug({ event: 'db_statement_executed', duration_ms: duration, rows_affected: result.rowsAffected ?? 0 })
     return result
+  } catch (error) {
+    const duration = Date.now() - startTime
+    logger.error({ event: 'db_statement_failed', duration_ms: duration, sql: sql.substring(0, 200), error })
+    throw error
   } finally {
     await connection.close()
   }

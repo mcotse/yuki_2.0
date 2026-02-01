@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { executeQuery, executeStatement } from '../db.js'
 import { v4 as uuidv4 } from 'uuid'
+import { logger } from '../lib/logger.js'
 
 const router = Router()
 
@@ -141,6 +142,17 @@ router.post('/', async (req, res, next) => {
 
     await executeStatement(sql, binds)
 
+    if (confirmed_at && confirmed_by) {
+      logger.info({
+        event: 'medication_confirmed',
+        instance_id: id,
+        item_id,
+        confirmed_by,
+        confirmed_at,
+        request_id: req.id,
+      })
+    }
+
     res.status(201).json({ id, item_id, date, scheduled_time: timeOnly, status, is_adhoc, notes })
   } catch (error) {
     next(error)
@@ -181,6 +193,16 @@ router.patch('/:id', async (req, res, next) => {
       `UPDATE daily_instances SET ${updates.join(', ')} WHERE id = :id`,
       binds
     )
+
+    if (req.body.confirmed_at !== undefined && req.body.confirmed_by !== undefined) {
+      logger.info({
+        event: 'medication_confirmed',
+        instance_id: req.params.id,
+        confirmed_by: req.body.confirmed_by,
+        confirmed_at: req.body.confirmed_at,
+        request_id: req.id,
+      })
+    }
 
     res.json({ success: true })
   } catch (error) {

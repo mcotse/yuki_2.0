@@ -5,10 +5,22 @@ import { collection, getDocs, orderBy, query } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
 import { COLLECTIONS } from '@/types/database'
 import { formatDisplayDate, parseLocalDate, formatLocalDate } from '@/utils/date'
-import { RefreshCw, AlertCircle, Calendar, ChevronLeft, ChevronRight, Clock, X } from 'lucide-vue-next'
+import { RefreshCw, AlertCircle, Calendar, ChevronLeft, ChevronRight, Clock, X, LayoutGrid, List } from 'lucide-vue-next'
 import HistoryEntryComponent from '@/components/history/HistoryEntry.vue'
+import HistoryListItem from '@/components/history/HistoryListItem.vue'
+
+type ViewMode = 'card' | 'list'
 
 const historyStore = useHistoryStore()
+
+// View mode with localStorage persistence
+const STORAGE_KEY = 'history-view-mode'
+const viewMode = ref<ViewMode>((localStorage.getItem(STORAGE_KEY) as ViewMode) || 'list')
+
+function setViewMode(mode: ViewMode) {
+  viewMode.value = mode
+  localStorage.setItem(STORAGE_KEY, mode)
+}
 
 const showDatePicker = ref(false)
 const datePickerInput = ref('')
@@ -148,10 +160,32 @@ onMounted(() => {
       </button>
     </div>
 
-    <!-- Summary -->
-    <p class="text-center text-sm text-muted-foreground mb-6">
-      {{ historyStore.totalEntries }} confirmation{{ historyStore.totalEntries !== 1 ? 's' : '' }}
-    </p>
+    <!-- Summary and View Toggle -->
+    <div class="flex items-center justify-between mb-6">
+      <p class="text-sm text-muted-foreground">
+        {{ historyStore.totalEntries }} confirmation{{ historyStore.totalEntries !== 1 ? 's' : '' }}
+      </p>
+
+      <!-- View Mode Toggle -->
+      <div class="flex items-center gap-1 p-1 bg-muted rounded-xl">
+        <button
+          class="p-2 rounded-lg transition-all"
+          :class="viewMode === 'list' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'"
+          @click="setViewMode('list')"
+          title="List view"
+        >
+          <List class="w-4 h-4" />
+        </button>
+        <button
+          class="p-2 rounded-lg transition-all"
+          :class="viewMode === 'card' ? 'bg-card shadow-sm text-foreground' : 'text-muted-foreground hover:text-foreground'"
+          @click="setViewMode('card')"
+          title="Card view"
+        >
+          <LayoutGrid class="w-4 h-4" />
+        </button>
+      </div>
+    </div>
 
     <!-- Loading State -->
     <div v-if="historyStore.isLoading" class="py-12 text-center">
@@ -168,13 +202,36 @@ onMounted(() => {
     </div>
 
     <!-- History List -->
-    <div v-else-if="historyStore.entriesByTime.length > 0" class="space-y-3">
-      <HistoryEntryComponent
-        v-for="entry in historyStore.entriesByTime"
-        :key="entry.instance.id"
-        :entry="entry"
-        @edit="startEdit"
-      />
+    <div v-else-if="historyStore.entriesByTime.length > 0">
+      <!-- Card View -->
+      <TransitionGroup
+        v-if="viewMode === 'card'"
+        name="card-list"
+        tag="div"
+        class="space-y-3"
+      >
+        <HistoryEntryComponent
+          v-for="entry in historyStore.entriesByTime"
+          :key="entry.instance.id"
+          :entry="entry"
+          @edit="startEdit"
+        />
+      </TransitionGroup>
+
+      <!-- List View -->
+      <div
+        v-else
+        class="history-list-container"
+      >
+        <TransitionGroup name="list-item" tag="div">
+          <HistoryListItem
+            v-for="entry in historyStore.entriesByTime"
+            :key="entry.instance.id"
+            :entry="entry"
+            @edit="startEdit"
+          />
+        </TransitionGroup>
+      </div>
     </div>
 
     <!-- Empty State -->
@@ -310,3 +367,36 @@ onMounted(() => {
     </Teleport>
   </main>
 </template>
+
+<style scoped>
+/* List View Container */
+.history-list-container {
+  background-color: var(--color-card);
+  border: var(--border-width) solid var(--color-foreground);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-muted);
+  overflow: hidden;
+}
+
+/* List Item Transitions */
+.list-item-move,
+.list-item-enter-active,
+.list-item-leave-active {
+  transition: all 0.3s ease;
+}
+
+.list-item-enter-from {
+  opacity: 0;
+  transform: translateX(-20px);
+}
+
+.list-item-leave-to {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.list-item-leave-active {
+  position: absolute;
+  width: 100%;
+}
+</style>

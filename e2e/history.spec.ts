@@ -340,6 +340,97 @@ test.describe('History Entry Expansion', () => {
   })
 })
 
+test.describe('Modal Input Field Styling', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+    await login(page)
+    await page.goto('/history')
+    await page.waitForLoadState('networkidle')
+  })
+
+  test('date picker input should have proper styling without excessive visual weight', async ({
+    page,
+  }) => {
+    // Open date picker modal
+    const dateButton = page.locator('button').filter({ has: page.locator('svg.lucide-calendar') })
+    await dateButton.click()
+    await expect(page.getByRole('heading', { name: 'Select Date' })).toBeVisible()
+
+    // Get the date input element
+    const dateInput = page.locator('input[type="date"]')
+    await expect(dateInput).toBeVisible()
+
+    // Verify input has proper background color (white #FFFFFF, not cream #FFFDF5)
+    const bgColor = await dateInput.evaluate((el) => {
+      return window.getComputedStyle(el).backgroundColor
+    })
+    // rgb(255, 255, 255) is white, rgb(255, 253, 245) is cream background
+    expect(bgColor).toBe('rgb(255, 255, 255)')
+
+    // Verify input has consistent padding (py-2 = 0.5rem = 8px, not py-3 = 0.75rem = 12px)
+    const paddingTop = await dateInput.evaluate((el) => {
+      return window.getComputedStyle(el).paddingTop
+    })
+    const paddingTopPx = parseFloat(paddingTop)
+    // Should be 8px (compact) not 12px (excessive)
+    expect(paddingTopPx).toBeLessThanOrEqual(8)
+  })
+
+  test('edit modal inputs should have consistent compact styling', async ({ page }) => {
+    // First we need to have entries to edit - confirm something on dashboard
+    await page.goto('/')
+    await page.waitForLoadState('networkidle')
+
+    const confirmButtons = page.locator('.btn-primary')
+    if ((await confirmButtons.count()) > 0) {
+      page.once('dialog', (dialog) => dialog.accept())
+      await confirmButtons.first().click()
+      await page.waitForLoadState('networkidle')
+    }
+
+    // Go to history
+    await page.goto('/history')
+    await page.waitForLoadState('networkidle')
+
+    // Try to open edit modal
+    const cards = page.locator('.card')
+    if ((await cards.count()) > 0) {
+      const editButton = cards.first().locator('button').filter({ has: page.locator('svg') })
+      if ((await editButton.count()) > 0) {
+        await editButton.first().click()
+        await expect(page.getByRole('heading', { name: 'Edit Confirmation' })).toBeVisible()
+
+        // Verify time input styling
+        const timeInput = page.locator('input[type="time"]')
+        const timeBgColor = await timeInput.evaluate((el) => {
+          return window.getComputedStyle(el).backgroundColor
+        })
+        expect(timeBgColor).toBe('rgb(255, 255, 255)')
+
+        const timePadding = await timeInput.evaluate((el) => {
+          return window.getComputedStyle(el).paddingTop
+        })
+        expect(parseFloat(timePadding)).toBeLessThanOrEqual(8)
+
+        // Verify select styling
+        const selectInput = page.locator('select')
+        const selectBgColor = await selectInput.evaluate((el) => {
+          return window.getComputedStyle(el).backgroundColor
+        })
+        expect(selectBgColor).toBe('rgb(255, 255, 255)')
+
+        // Verify textarea styling
+        const textarea = page.locator('textarea')
+        const textareaBgColor = await textarea.evaluate((el) => {
+          return window.getComputedStyle(el).backgroundColor
+        })
+        expect(textareaBgColor).toBe('rgb(255, 255, 255)')
+      }
+    }
+  })
+})
+
 test.describe('History Navigation Integration', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')

@@ -201,7 +201,7 @@ onMounted(() => {
             v-model="datePickerInput"
             type="date"
             :max="formatLocalDate(new Date())"
-            class="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+            class="w-full px-4 py-2 rounded-xl border border-border bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
           />
           <div class="flex gap-3 mt-4">
             <button
@@ -256,7 +256,7 @@ onMounted(() => {
               <input
                 v-model="editTime"
                 type="time"
-                class="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                class="w-full px-4 py-2 rounded-xl border border-border bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
 
@@ -266,7 +266,7 @@ onMounted(() => {
               </label>
               <select
                 v-model="editConfirmedBy"
-                class="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
+                class="w-full px-4 py-2 rounded-xl border border-border bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-accent"
               >
                 <option :value="null">Unknown</option>
                 <option v-for="user in users" :key="user.id" :value="user.id">
@@ -283,7 +283,7 @@ onMounted(() => {
                 v-model="editNotes"
                 rows="3"
                 placeholder="Add notes..."
-                class="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-accent resize-none"
+                class="w-full px-4 py-2 rounded-xl border border-border bg-input text-foreground focus:outline-none focus:ring-2 focus:ring-accent resize-none"
               />
             </div>
           </div>

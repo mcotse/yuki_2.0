@@ -144,11 +144,11 @@ export const useInstancesStore = defineStore('instances', () => {
       if (!db) {
         const instanceRows = localData.getInstancesForDate(date)
 
-        // Join with items
+        // Join with items (skip archived/inactive items)
         const joined: DailyInstanceWithItem[] = []
         for (const instance of instanceRows) {
           const item = itemsStore.getItemById(instance.item_id)
-          if (item) {
+          if (item && item.active) {
             if (instance.is_adhoc && instance.notes?.startsWith('[')) {
               const displayItem = createQuickLogDisplayItem(instance.notes, item)
               joined.push({ ...instance, item: displayItem })
@@ -175,10 +175,11 @@ export const useInstancesStore = defineStore('instances', () => {
       const instanceRows = snapshot.docs.map((doc) => docToInstance(doc.data(), doc.id))
 
       // Join with items, creating display-friendly items for quick logs
+      // Skip instances for archived/inactive items
       const joined: DailyInstanceWithItem[] = []
       for (const instance of instanceRows) {
         const item = itemsStore.getItemById(instance.item_id)
-        if (item) {
+        if (item && item.active) {
           // Check if this is a quick log entry (has [category] in notes)
           if (instance.is_adhoc && instance.notes?.startsWith('[')) {
             const displayItem = createQuickLogDisplayItem(instance.notes, item)
@@ -232,7 +233,7 @@ export const useInstancesStore = defineStore('instances', () => {
           const instanceRows = localData.getInstancesForDate(dateString)
           for (const instance of instanceRows) {
             const item = itemsStore.getItemById(instance.item_id)
-            if (item) {
+            if (item && item.active) {
               allUpcomingInstances.push({ ...instance, item })
             }
           }
@@ -252,7 +253,7 @@ export const useInstancesStore = defineStore('instances', () => {
           for (const docSnap of snapshot.docs) {
             const instance = docToInstance(docSnap.data(), docSnap.id)
             const item = itemsStore.getItemById(instance.item_id)
-            if (item) {
+            if (item && item.active) {
               allUpcomingInstances.push({ ...instance, item })
             }
           }

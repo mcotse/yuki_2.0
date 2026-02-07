@@ -50,3 +50,24 @@
 ### Subtasks
 - [x] Add `z-50` to `BottomTabBar` component
 - [x] Verify cards scroll behind the nav bar
+
+## [BEAD-005] Fix GitHub Pages SPA routing (missing 404.html)
+
+- **Status**: completed
+- **Created**: 2026-02-07
+- **Description**: Pages fail to load on GitHub Pages when navigating directly to a sub-route or refreshing on one (e.g., `/yuki_2.0/history`). GitHub Pages returns a 404 because no actual file exists at that path. Need to copy `index.html` to `404.html` during the deploy build so GitHub Pages serves the SPA shell for all routes.
+
+### Subtasks
+- [x] Add post-build step to deploy workflow to copy index.html to 404.html
+
+## [BEAD-006] Fix broken asset paths for GitHub Pages base path
+
+- **Status**: completed
+- **Created**: 2026-02-07
+- **Description**: Several static asset references use root-relative paths (`/`) that don't resolve correctly on GitHub Pages where the app is served from `/yuki_2.0/`. Vite rewrites JS/CSS/manifest links but not inline scripts or public JSON files.
+
+### Subtasks
+- [x] Fix service worker registration path in index.html inline script
+- [x] Fix manifest.json `start_url`, `scope`, and icon paths
+- [x] Fix sw.js cached static asset paths
+- [x] Clean up apple-touch-icon references (icons directory doesn't exist)

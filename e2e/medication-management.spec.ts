@@ -399,10 +399,6 @@ test.describe('Medication Management - Clone Medication', () => {
     await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
     await page.waitForLoadState('networkidle')
 
-    // Get original medication name
-    const firstName = await page.locator('.card').first().locator('h3').textContent()
-    const sourceName = firstName?.replace('(inactive)', '').trim() || ''
-
     // Click clone on first card
     await page.locator('.card').first().getByTitle('Clone').click()
     await expect(page.getByRole('heading', { name: 'Clone Item' })).toBeVisible()
@@ -428,9 +424,7 @@ test.describe('Medication Management - Clone Medication', () => {
     await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
     await page.waitForLoadState('networkidle')
 
-    // Read source card details before cloning
     const firstCard = page.locator('.card').first()
-    const sourceBadges = await firstCard.locator('.rounded-full').allTextContents()
 
     // Clone it
     await firstCard.getByTitle('Clone').click()

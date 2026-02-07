@@ -26,7 +26,7 @@ const activeFilter = ref<string | null>(null)
 // Collapsible section states
 const filtersCollapsed = ref(true) // Start collapsed for less intrusive UI
 const overdueCollapsed = ref(false)
-const upcomingCollapsed = ref(false)
+const upcomingCollapsed = ref(true) // Start collapsed to reduce noise
 const upcomingDaysCollapsed = ref(true) // Start collapsed to focus on today
 const completedCollapsed = ref(false)
 
@@ -332,7 +332,7 @@ onMounted(loadDashboard)
           @click="upcomingCollapsed = !upcomingCollapsed"
         >
           <h2 class="text-sm font-bold text-muted-foreground uppercase tracking-wider">
-            Coming Up
+            Later Today
           </h2>
           <span class="text-xs text-muted-foreground/70 font-medium">({{ filteredUpcoming.length }})</span>
           <ChevronDown

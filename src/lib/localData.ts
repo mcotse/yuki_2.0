@@ -32,8 +32,9 @@ const SAMPLE_ITEMS: ItemWithSchedules[] = [
     schedules: [
       { id: 'sch-oflox-1', item_id: 'ofloxacin', time_slot: 'morning', scheduled_time: '08:00', created_at: new Date().toISOString() },
       { id: 'sch-oflox-2', item_id: 'ofloxacin', time_slot: 'midday', scheduled_time: '12:00', created_at: new Date().toISOString() },
-      { id: 'sch-oflox-3', item_id: 'ofloxacin', time_slot: 'evening', scheduled_time: '17:00', created_at: new Date().toISOString() },
-      { id: 'sch-oflox-4', item_id: 'ofloxacin', time_slot: 'night', scheduled_time: '21:00', created_at: new Date().toISOString() },
+      { id: 'sch-oflox-3', item_id: 'ofloxacin', time_slot: 'afternoon', scheduled_time: '14:00', created_at: new Date().toISOString() },
+      { id: 'sch-oflox-4', item_id: 'ofloxacin', time_slot: 'evening', scheduled_time: '17:00', created_at: new Date().toISOString() },
+      { id: 'sch-oflox-5', item_id: 'ofloxacin', time_slot: 'night', scheduled_time: '21:00', created_at: new Date().toISOString() },
     ],
   },
   {

@@ -294,7 +294,7 @@ function handleSnooze(minutes: SnoozeInterval) {
   >
     <!-- Delete action behind the card -->
     <div
-      v-if="!compact"
+      v-if="!compact && swipeOffset !== 0"
       class="swipe-delete-action"
       :style="{ width: Math.abs(swipeOffset) + 'px' }"
       @click.stop="handleDelete"

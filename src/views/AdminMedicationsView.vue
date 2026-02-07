@@ -9,6 +9,7 @@ import {
   Plus,
   Edit2,
   Trash2,
+  Copy,
   Droplet,
   Pill,
   Utensils,
@@ -43,6 +44,9 @@ const formDose = ref('')
 const formFrequency = ref<ItemFrequency>('1x_daily')
 const formConflictGroup = ref('')
 const formNotes = ref('')
+const isCloning = ref(false)
+const cloneSchedules = ref<Array<{ time_slot: string; scheduled_time: string }>>([])
+const cloneSourceName = ref('')
 
 // Computed
 const filteredItems = computed(() => {
@@ -132,6 +136,25 @@ function openEditModal(item: ItemWithSchedules) {
   showAddModal.value = true
 }
 
+function openCloneModal(item: ItemWithSchedules) {
+  resetForm()
+  editingItem.value = null
+  isCloning.value = true
+  cloneSourceName.value = item.name
+  formName.value = `${item.name} (copy)`
+  formType.value = item.type as ItemType
+  formCategory.value = (item.category as ItemCategory) ?? 'oral'
+  formDose.value = item.dose ?? ''
+  formFrequency.value = (item.frequency as ItemFrequency) ?? '1x_daily'
+  formConflictGroup.value = item.conflict_group ?? ''
+  formNotes.value = item.notes ?? ''
+  cloneSchedules.value = (item.schedules || []).map(s => ({
+    time_slot: s.time_slot,
+    scheduled_time: s.scheduled_time,
+  }))
+  showAddModal.value = true
+}
+
 function closeModal() {
   showAddModal.value = false
   editingItem.value = null
@@ -146,6 +169,9 @@ function resetForm() {
   formFrequency.value = '1x_daily'
   formConflictGroup.value = ''
   formNotes.value = ''
+  isCloning.value = false
+  cloneSchedules.value = []
+  cloneSourceName.value = ''
 }
 
 // Compute location from category
@@ -177,8 +203,11 @@ async function saveItem() {
       // Update existing item
       await itemsStore.updateItem(editingItem.value.id, itemData)
     } else {
-      // Create new item
-      await itemsStore.createItem(itemData)
+      // Create new item (pass schedules if cloning)
+      const schedules = isCloning.value && cloneSchedules.value.length > 0
+        ? cloneSchedules.value
+        : undefined
+      await itemsStore.createItem(itemData, schedules)
     }
 
     closeModal()
@@ -288,6 +317,13 @@ onMounted(() => {
               <div class="flex items-center gap-1">
                 <button
                   class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                  title="Clone"
+                  @click="openCloneModal(item)"
+                >
+                  <Copy class="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button
+                  class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
                   title="Edit"
                   @click="openEditModal(item)"
                 >
@@ -363,7 +399,7 @@ onMounted(() => {
         <div class="bg-card rounded-2xl p-6 w-full max-w-md shadow-xl max-h-[90vh] overflow-y-auto">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-lg font-semibold text-foreground">
-              {{ editingItem ? 'Edit Item' : 'Add Item' }}
+              {{ editingItem ? 'Edit Item' : isCloning ? 'Clone Item' : 'Add Item' }}
             </h2>
             <button
               class="p-1 rounded-lg hover:bg-muted/50 transition-colors"
@@ -371,6 +407,15 @@ onMounted(() => {
             >
               <X class="w-5 h-5 text-muted-foreground" />
             </button>
+          </div>
+
+          <!-- Clone info banner -->
+          <div
+            v-if="isCloning"
+            class="flex items-center gap-2 px-3 py-2 mb-4 rounded-xl bg-accent/10 text-sm text-accent"
+          >
+            <Copy class="w-4 h-4 flex-shrink-0" />
+            <span>Cloning from <strong>{{ cloneSourceName }}</strong> — edit any fields below, then save.</span>
           </div>
 
           <form class="space-y-4" @submit.prevent="saveItem">
@@ -478,6 +523,26 @@ onMounted(() => {
               />
             </div>
 
+            <!-- Cloned schedules info -->
+            <div v-if="isCloning && cloneSchedules.length > 0">
+              <label class="block text-sm font-medium text-muted-foreground mb-1">
+                Schedules (copied)
+              </label>
+              <div class="flex flex-wrap gap-2">
+                <span
+                  v-for="(schedule, idx) in cloneSchedules"
+                  :key="idx"
+                  class="px-3 py-1 text-sm font-medium bg-muted rounded-full text-foreground"
+                >
+                  {{ schedule.scheduled_time.substring(0, 5) }}
+                  <span class="text-muted-foreground ml-1 text-xs">{{ schedule.time_slot }}</span>
+                </span>
+              </div>
+              <p class="text-xs text-muted-foreground mt-1">
+                Schedule times will be copied from the original item.
+              </p>
+            </div>
+
             <!-- Actions -->
             <div class="flex gap-3 pt-2">
               <button
@@ -495,8 +560,8 @@ onMounted(() => {
               >
                 <RefreshCw v-if="isSaving" class="w-5 h-5 animate-spin" />
                 <template v-else>
-                  <Check class="w-4 h-4" />
-                  <span>{{ editingItem ? 'Save' : 'Add' }}</span>
+                  <component :is="isCloning ? Copy : Check" class="w-4 h-4" />
+                  <span>{{ editingItem ? 'Save' : isCloning ? 'Clone' : 'Add' }}</span>
                 </template>
               </button>
             </div>

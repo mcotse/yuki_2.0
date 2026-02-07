@@ -71,3 +71,16 @@
 - [x] Fix manifest.json `start_url`, `scope`, and icon paths
 - [x] Fix sw.js cached static asset paths
 - [x] Clean up apple-touch-icon references (icons directory doesn't exist)
+
+## [BEAD-007] Add clone/duplicate schedule feature
+
+- **Status**: completed
+- **Created**: 2026-02-07
+- **Description**: Allow users to clone an existing medication/item schedule so they can quickly create a similar entry with modifications (e.g., same eyedrop for a different eye, same medication with different frequency). Adds a clone button to each item in the admin medications view that opens the add modal pre-populated with the source item's data and schedules.
+
+### Subtasks
+- [x] Add clone button (Copy icon) to each item card in AdminMedicationsView
+- [x] Add `openCloneModal` function that pre-fills form from source item
+- [x] Carry over schedules from source item when cloning
+- [x] Update modal title to show "Clone Item" when cloning
+- [x] Update `saveItem` to pass cloned schedules to `createItem`

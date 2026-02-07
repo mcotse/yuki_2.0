@@ -1,13 +1,17 @@
 // Service Worker for Yuki Care Tracker
-const STATIC_CACHE = 'yuki-static-v2'
-const DYNAMIC_CACHE = 'yuki-dynamic-v2'
+const STATIC_CACHE = 'yuki-static-v3'
+const DYNAMIC_CACHE = 'yuki-dynamic-v3'
 
-// Assets to cache on install
+// Derive the base path from the service worker's own location
+// e.g., /yuki_2.0/sw.js -> /yuki_2.0/
+const SW_BASE = self.location.pathname.replace(/sw\.js$/, '')
+
+// Assets to cache on install (relative to SW base)
 const STATIC_ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/favicon.ico',
+  SW_BASE,
+  SW_BASE + 'index.html',
+  SW_BASE + 'manifest.json',
+  SW_BASE + 'favicon.ico',
 ]
 
 // Install event - cache static assets
@@ -65,7 +69,7 @@ self.addEventListener('fetch', (event) => {
         .catch(() => {
           // Return cached page or offline fallback
           return caches.match(request).then((cached) => {
-            return cached || caches.match('/')
+            return cached || caches.match(SW_BASE)
           })
         })
     )
@@ -113,11 +117,9 @@ self.addEventListener('push', (event) => {
   const data = event.data.json()
   const options = {
     body: data.body || 'Time to give medication',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
     vibrate: [100, 50, 100],
     data: {
-      url: data.url || '/',
+      url: data.url || SW_BASE,
     },
     actions: [
       { action: 'confirm', title: 'Confirm' },

@@ -6,6 +6,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -542,6 +543,40 @@ export const useInstancesStore = defineStore('instances', () => {
     }
   }
 
+  async function deleteInstance(instanceId: string): Promise<boolean> {
+    const instance = instances.value.find((i) => i.id === instanceId)
+    if (!instance) {
+      error.value = 'Instance not found'
+      return false
+    }
+
+    try {
+      // Use local data if Firebase is not configured
+      if (!db) {
+        const deleted = localData.deleteInstance(selectedDate.value, instanceId)
+        if (!deleted) {
+          error.value = 'Failed to delete instance'
+          return false
+        }
+      } else {
+        const instanceRef = doc(db, COLLECTIONS.DAILY_INSTANCES, instanceId)
+        await deleteDoc(instanceRef)
+      }
+
+      // Cancel any scheduled notification
+      notificationService.cancelNotification(instanceId)
+
+      // Remove from local state
+      instances.value = instances.value.filter((i) => i.id !== instanceId)
+
+      return true
+    } catch (e) {
+      error.value = e instanceof Error ? e.message : 'Failed to delete'
+      console.error('Error deleting instance:', e)
+      return false
+    }
+  }
+
   async function createAdHocInstance(
     itemId: string,
     scheduledTime: Date,
@@ -754,6 +789,7 @@ export const useInstancesStore = defineStore('instances', () => {
     checkConflict,
     confirmInstance,
     undoConfirmation,
+    deleteInstance,
     snoozeInstance,
     createAdHocInstance,
     createQuickLog,

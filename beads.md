@@ -15,3 +15,16 @@
 ### Subtasks
 - [x] Filter out archived items in `fetchInstancesForDate` (both local and Firebase paths)
 - [x] Filter out archived items in `fetchUpcomingDaysInstances` (both local and Firebase paths)
+
+## [BEAD-002] Add swipe-to-delete for reminder cards on dashboard
+
+- **Status**: completed
+- **Created**: 2026-02-07
+- **Description**: Allow users to delete a reminder instance from the dashboard without completing it, by swiping left to reveal a delete button.
+
+### Subtasks
+- [x] Add `deleteInstance` method to `localData.ts`
+- [x] Add `deleteInstance` action to instances Pinia store (Firestore + localStorage)
+- [x] Add swipe-left gesture handling to `MedicationCard.vue` to reveal delete button
+- [x] Wire up `delete` event in `DashboardView.vue`
+- [x] Add swipe and delete CSS animations to `main.css`

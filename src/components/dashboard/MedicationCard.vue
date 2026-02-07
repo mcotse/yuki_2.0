@@ -13,6 +13,7 @@ import {
   Info,
   ChevronUp,
   Undo2,
+  Trash2,
 } from 'lucide-vue-next'
 
 const props = withDefaults(
@@ -30,12 +31,115 @@ const emit = defineEmits<{
   confirm: [overrideConflict?: boolean]
   snooze: [minutes: SnoozeInterval]
   undo: []
+  delete: []
 }>()
 
 const instancesStore = useInstancesStore()
 const isExpanded = ref(false)
 const isConfirming = ref(false)
 const showSnoozeOptions = ref(false)
+
+// Swipe-to-delete state
+const swipeOffset = ref(0)
+const isSwipeRevealed = ref(false)
+const isDeleting = ref(false)
+let touchStartX = 0
+let touchStartY = 0
+let isSwiping = false
+const DELETE_REVEAL_THRESHOLD = 72 // px to reveal delete button
+const DELETE_BUTTON_WIDTH = 80 // px width of the delete action area
+
+function handleTouchStart(e: TouchEvent) {
+  if (props.compact) return
+  const touch = e.touches[0]
+  if (!touch) return
+  touchStartX = touch.clientX
+  touchStartY = touch.clientY
+  isSwiping = false
+}
+
+function handleTouchMove(e: TouchEvent) {
+  if (props.compact) return
+  const touch = e.touches[0]
+  if (!touch) return
+
+  const deltaX = touch.clientX - touchStartX
+  const deltaY = touch.clientY - touchStartY
+
+  // Determine if this is a horizontal swipe (vs vertical scroll)
+  if (!isSwiping && Math.abs(deltaX) > 10) {
+    // Only capture horizontal swipe if it's more horizontal than vertical
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+      isSwiping = true
+    } else {
+      return
+    }
+  }
+
+  if (!isSwiping) return
+  e.preventDefault()
+
+  if (isSwipeRevealed.value) {
+    // Already revealed - allow swiping back to right
+    const newOffset = Math.min(0, -DELETE_BUTTON_WIDTH + deltaX)
+    swipeOffset.value = newOffset
+  } else {
+    // Swiping left to reveal (only allow leftward)
+    const newOffset = Math.min(0, deltaX)
+    // Add resistance after threshold
+    if (Math.abs(newOffset) > DELETE_BUTTON_WIDTH) {
+      const overflow = Math.abs(newOffset) - DELETE_BUTTON_WIDTH
+      swipeOffset.value = -(DELETE_BUTTON_WIDTH + overflow * 0.3)
+    } else {
+      swipeOffset.value = newOffset
+    }
+  }
+}
+
+function handleTouchEnd() {
+  if (props.compact || !isSwiping) return
+
+  const absOffset = Math.abs(swipeOffset.value)
+
+  if (isSwipeRevealed.value) {
+    // If swiped back enough, close it
+    if (absOffset < DELETE_BUTTON_WIDTH * 0.5) {
+      closeSwipe()
+    } else {
+      snapOpen()
+    }
+  } else {
+    // If swiped far enough, reveal delete button
+    if (absOffset >= DELETE_REVEAL_THRESHOLD) {
+      snapOpen()
+    } else {
+      closeSwipe()
+    }
+  }
+}
+
+function snapOpen() {
+  swipeOffset.value = -DELETE_BUTTON_WIDTH
+  isSwipeRevealed.value = true
+}
+
+function closeSwipe() {
+  swipeOffset.value = 0
+  isSwipeRevealed.value = false
+}
+
+function handleDelete() {
+  if (isDeleting.value) return
+  const confirmed = window.confirm(
+    `Delete "${props.instance.item.name}" from today's schedule? This cannot be undone.`,
+  )
+  if (!confirmed) {
+    closeSwipe()
+    return
+  }
+  isDeleting.value = true
+  emit('delete')
+}
 
 // Live countdown timer for conflict warning
 const countdownSeconds = ref(0)
@@ -176,20 +280,36 @@ function handleSnooze(minutes: SnoozeInterval) {
 </script>
 
 <template>
-  <div
-    class="card transition-all"
-    :class="[
-      compact ? 'p-3' : 'p-4',
-      {
-        'opacity-60': status === 'confirmed',
-        'border-error/50 bg-error/5': status === 'overdue',
-        'ring-2 ring-accent': status === 'due',
-        'bg-secondary/5 border-secondary/30': compact,
-        'cursor-pointer hover:bg-muted/30': !compact && instance.item.notes,
-      },
-    ]"
-    @click="!compact && instance.item.notes ? isExpanded = !isExpanded : null"
-  >
+  <div class="swipe-container" :class="{ 'swipe-deleting': isDeleting }">
+    <!-- Delete action behind the card -->
+    <div
+      v-if="!compact"
+      class="swipe-delete-action"
+      :style="{ width: Math.abs(swipeOffset) + 'px' }"
+      @click.stop="handleDelete"
+    >
+      <Trash2 class="w-5 h-5 text-white" />
+    </div>
+
+    <!-- Main card -->
+    <div
+      class="card transition-[box-shadow,border-color,opacity,background-color] swipe-card"
+      :class="[
+        compact ? 'p-3' : 'p-4',
+        {
+          'opacity-60': status === 'confirmed',
+          'border-error/50 bg-error/5': status === 'overdue',
+          'ring-2 ring-accent': status === 'due',
+          'bg-secondary/5 border-secondary/30': compact,
+          'cursor-pointer hover:bg-muted/30': !compact && instance.item.notes,
+        },
+      ]"
+      :style="!compact ? { transform: `translateX(${swipeOffset}px)` } : undefined"
+      @click="!compact && instance.item.notes ? isExpanded = !isExpanded : null"
+      @touchstart.passive="handleTouchStart"
+      @touchmove="handleTouchMove"
+      @touchend.passive="handleTouchEnd"
+    >
     <!-- Main Row -->
     <div class="flex items-center" :class="compact ? 'gap-3' : 'gap-4'">
       <!-- Icon -->
@@ -309,6 +429,7 @@ function handleSnooze(minutes: SnoozeInterval) {
     <!-- Expanded Notes -->
     <div v-if="!compact && isExpanded && instance.item.notes" class="mt-3 pt-3 border-t border-muted">
       <p class="text-sm text-muted-foreground">{{ instance.item.notes }}</p>
+    </div>
     </div>
   </div>
 </template>

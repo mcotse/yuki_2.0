@@ -545,3 +545,70 @@ section {
   opacity: 0;
   transform: scale(0.9) translateX(12px);
 }
+
+/* ============================================
+   Swipe-to-Delete
+   ============================================ */
+
+.swipe-container {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.swipe-card {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.15s ease-out;
+  touch-action: pan-y;
+}
+
+.swipe-delete-action {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-error);
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  cursor: pointer;
+  min-width: 0;
+  overflow: hidden;
+  transition: background-color 0.15s ease;
+}
+
+.swipe-delete-action:hover {
+  background-color: #DC2626;
+}
+
+.swipe-delete-action:active {
+  background-color: #B91C1C;
+}
+
+/* Deleting animation */
+.swipe-deleting {
+  animation: swipeDeleteOut 0.35s var(--ease-bounce) forwards;
+}
+
+@keyframes swipeDeleteOut {
+  0% {
+    opacity: 1;
+    max-height: 200px;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.95) translateX(-20px);
+  }
+  100% {
+    opacity: 0;
+    max-height: 0;
+    transform: scale(0.9) translateX(-40px);
+    margin-top: 0;
+    margin-bottom: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}

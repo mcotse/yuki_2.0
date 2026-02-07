@@ -280,7 +280,18 @@ function handleSnooze(minutes: SnoozeInterval) {
 </script>
 
 <template>
-  <div class="swipe-container" :class="{ 'swipe-deleting': isDeleting }">
+  <div
+    class="swipe-container"
+    :class="[
+      { 'swipe-deleting': isDeleting },
+      compact ? 'swipe-container-compact' : 'swipe-container-active',
+      {
+        'border-error/50 bg-error/5': !compact && status === 'overdue',
+        'ring-2 ring-accent': !compact && status === 'due',
+        'opacity-60': !compact && status === 'confirmed',
+      },
+    ]"
+  >
     <!-- Delete action behind the card -->
     <div
       v-if="!compact"
@@ -297,9 +308,9 @@ function handleSnooze(minutes: SnoozeInterval) {
       :class="[
         compact ? 'p-3' : 'p-4',
         {
-          'opacity-60': status === 'confirmed',
-          'border-error/50 bg-error/5': status === 'overdue',
-          'ring-2 ring-accent': status === 'due',
+          'opacity-60': compact && status === 'confirmed',
+          'bg-error/5': status === 'overdue',
+          'ring-2 ring-accent': compact && status === 'due',
           'bg-secondary/5 border-secondary/30': compact,
           'cursor-pointer hover:bg-muted/30': !compact && instance.item.notes,
         },

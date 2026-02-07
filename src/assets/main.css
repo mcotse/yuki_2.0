@@ -230,7 +230,8 @@ section {
     transition-duration: 0.01ms !important;
   }
 
-  .card:hover {
+  .card:hover,
+  .swipe-container-active:hover {
     transform: none;
   }
 
@@ -251,6 +252,10 @@ section {
   }
 
   .card {
+    box-shadow: 4px 4px 0px 0px var(--color-border);
+  }
+
+  .swipe-container-active {
     box-shadow: 4px 4px 0px 0px var(--color-border);
   }
 }
@@ -552,8 +557,38 @@ section {
 
 .swipe-container {
   position: relative;
-  overflow: hidden;
   border-radius: var(--radius-lg);
+}
+
+/* Active (non-compact) swipe containers take over card styling */
+.swipe-container-active {
+  overflow: hidden;
+  border: var(--border-width) solid var(--color-foreground);
+  box-shadow: var(--shadow-muted);
+  background-color: var(--color-card);
+  transition: all var(--duration-normal) var(--ease-bounce);
+}
+
+.swipe-container-active:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Remove card's own border, shadow, and hover when inside active swipe container */
+.swipe-container-active > .swipe-card.card {
+  border: none;
+  box-shadow: none;
+  border-radius: var(--radius-lg);
+}
+
+.swipe-container-active > .swipe-card.card:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Compact containers are transparent wrappers - card keeps its own styling */
+.swipe-container-compact {
+  overflow: visible;
 }
 
 .swipe-card {
@@ -572,7 +607,6 @@ section {
   align-items: center;
   justify-content: center;
   background-color: var(--color-error);
-  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
   cursor: pointer;
   min-width: 0;
   overflow: hidden;

@@ -28,7 +28,7 @@ function navigateTo(path: string) {
 
 <template>
   <nav
-    class="fixed bottom-0 left-0 right-0 bg-card border-t-2 border-foreground safe-area-bottom"
+    class="fixed bottom-0 left-0 right-0 z-50 bg-card border-t-2 border-foreground safe-area-bottom"
   >
     <div class="flex justify-around items-center h-16 max-w-lg mx-auto">
       <button

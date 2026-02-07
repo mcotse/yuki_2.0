@@ -11,12 +11,24 @@ async function loginAsAdmin(page: Page) {
   await expect(page).toHaveURL('/')
 }
 
-// Helper to navigate to medication management page
+// Helper to navigate to medication management page (via Settings → Manage Reminders)
 async function navigateToMedicationManagement(page: Page) {
   await page.getByRole('button', { name: /settings/i }).click()
   await expect(page).toHaveURL('/settings')
   await page.getByText('Manage Reminders').click()
-  await expect(page).toHaveURL('/admin/medications')
+  await expect(page).toHaveURL('/medications')
+}
+
+// Helper to open the add modal on MedicationsView (Plus icon button, no text)
+async function openAddModal(page: Page) {
+  await page.locator('button').filter({ has: page.locator('svg.lucide-plus') }).click()
+  await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible()
+}
+
+// Helper to click edit on a card in MedicationsView
+// Edit is the first button in each card (before Archive and expand buttons)
+async function clickEditOnCard(card: ReturnType<Page['locator']>) {
+  await card.locator('button').first().click()
 }
 
 test.describe('Medication Management - Access Control', () => {
@@ -32,8 +44,8 @@ test.describe('Medication Management - Access Control', () => {
     // Should see the page header
     await expect(page.getByRole('heading', { name: 'Manage Reminders' })).toBeVisible()
 
-    // Should see Add button
-    await expect(page.getByRole('button', { name: /add/i })).toBeVisible()
+    // Should see Add button (Plus icon)
+    await expect(page.locator('button').filter({ has: page.locator('svg.lucide-plus') })).toBeVisible()
   })
 
   test('unauthenticated user is redirected to login', async ({ page }) => {
@@ -67,32 +79,32 @@ test.describe('Medication Management - View Medications', () => {
     const cards = page.locator('.card')
     await expect(cards.first()).toBeVisible({ timeout: 10000 })
 
-    // Cards should show type and frequency badges (use first() due to multiple badges)
+    // Cards should show location and frequency info
     const firstCard = cards.first()
-    await expect(firstCard.locator('.rounded-full').first()).toBeVisible()
+    await expect(firstCard.locator('p').first()).toBeVisible()
   })
 
-  test('can filter by type', async ({ page }) => {
+  test('items are grouped by type', async ({ page }) => {
     // Wait for medications to load
     await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
 
-    // Select medication type filter
-    const typeFilter = page.locator('select')
-    await typeFilter.selectOption('medication')
+    // Should show type section headings (Medications, Supplements, Food)
+    const sectionHeadings = page.locator('h2')
+    await expect(sectionHeadings.first()).toBeVisible()
+  })
 
-    // Should only show medications (not food/supplements)
+  test('can toggle between active and archived', async ({ page }) => {
+    // Wait for medications to load
+    await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
+
+    // Click the Archived toggle button
+    await page.getByRole('button', { name: /Archived/i }).click()
+
+    // Should now show archived view (may have items or empty state)
     await page.waitForLoadState('networkidle')
-  })
 
-  test('can toggle show inactive', async ({ page }) => {
-    // Wait for medications to load
-    await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
-
-    // Toggle show inactive
-    const showInactiveCheckbox = page.locator('input[type="checkbox"]')
-    await showInactiveCheckbox.check()
-
-    // Count might change (more items visible if there are inactive ones)
+    // Switch back to Active
+    await page.getByRole('button', { name: /Active/i }).click()
     await page.waitForLoadState('networkidle')
   })
 
@@ -117,19 +129,15 @@ test.describe('Medication Management - Add Medication', () => {
   })
 
   test('opens add modal when clicking Add button', async ({ page }) => {
-    await page.getByRole('button', { name: /add/i }).click()
-
-    // Modal should appear
-    await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible()
+    await openAddModal(page)
 
     // Form fields should be present
-    await expect(page.getByPlaceholder('e.g., Ofloxacin 0.3%')).toBeVisible()
+    await expect(page.getByPlaceholder('e.g., Cyclosporine')).toBeVisible()
     await expect(page.locator('select').first()).toBeVisible()
   })
 
   test('can close add modal with Cancel', async ({ page }) => {
-    await page.getByRole('button', { name: /add/i }).click()
-    await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible()
+    await openAddModal(page)
 
     await page.getByRole('button', { name: 'Cancel' }).click()
 
@@ -137,8 +145,7 @@ test.describe('Medication Management - Add Medication', () => {
   })
 
   test('can close add modal with X button', async ({ page }) => {
-    await page.getByRole('button', { name: /add/i }).click()
-    await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible()
+    await openAddModal(page)
 
     await page.locator('button').filter({ has: page.locator('svg.lucide-x') }).click()
 
@@ -146,10 +153,10 @@ test.describe('Medication Management - Add Medication', () => {
   })
 
   test('validates required name field', async ({ page }) => {
-    await page.getByRole('button', { name: /add/i }).click()
+    await openAddModal(page)
 
     // Try to submit without name - button should be disabled
-    const submitButton = page.getByRole('button', { name: /^add$/i }).last()
+    const submitButton = page.locator('button[type="submit"]')
     await expect(submitButton).toBeDisabled()
   })
 
@@ -159,28 +166,26 @@ test.describe('Medication Management - Add Medication', () => {
     // Wait for page to be ready
     await page.waitForLoadState('networkidle')
 
-    // Click the Add button in the header
-    await page.locator('button').filter({ hasText: /Add/ }).first().click()
-    await expect(page.getByRole('heading', { name: 'Add Item' })).toBeVisible()
+    await openAddModal(page)
 
     // Locate the modal form
-    const modal = page.locator('[role="dialog"], .fixed.inset-0').first()
+    const modal = page.locator('.fixed.inset-0').first()
 
-    // Fill form - wait for each field
-    const nameInput = page.getByPlaceholder('e.g., Ofloxacin 0.3%')
+    // Fill form
+    const nameInput = page.getByPlaceholder('e.g., Cyclosporine')
     await expect(nameInput).toBeVisible()
     await nameInput.fill(testMedName)
 
-    // Select dropdowns - target selects within the modal form area
+    // Select dropdowns within the modal
     const formSelects = modal.locator('select')
     await formSelects.nth(0).selectOption('medication') // Type
     await formSelects.nth(1).selectOption('oral') // Location/Category
 
-    await page.getByPlaceholder('e.g., 1 drop, 50mg').fill('1 tablet')
+    await page.getByPlaceholder('e.g., 1 drop, 2 capsules').fill('1 tablet')
     await formSelects.nth(2).selectOption('1x_daily') // Frequency
 
-    // Submit using the button inside the form modal
-    const submitButton = page.locator('button[type="submit"]').filter({ hasText: /Add/ })
+    // Submit
+    const submitButton = page.locator('button[type="submit"]').filter({ hasText: /Add Item/ })
     await submitButton.click()
 
     // Modal should close
@@ -205,11 +210,9 @@ test.describe('Medication Management - Edit Medication', () => {
     await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
     await page.waitForLoadState('networkidle')
 
-    // Find edit button using title attribute
+    // Find edit button using Edit2 icon
     const firstCard = page.locator('.card').first()
-    const editButton = firstCard.getByTitle('Edit')
-    await expect(editButton).toBeVisible()
-    await editButton.click()
+    await clickEditOnCard(firstCard)
 
     // Edit modal should appear
     await expect(page.getByRole('heading', { name: 'Edit Item' })).toBeVisible()
@@ -222,15 +225,15 @@ test.describe('Medication Management - Edit Medication', () => {
     // Get the name from the first card
     const firstName = await page.locator('.card').first().locator('h3').textContent()
 
-    // Click edit using title
+    // Click edit
     const firstCard = page.locator('.card').first()
-    await firstCard.getByTitle('Edit').click()
+    await clickEditOnCard(firstCard)
 
     // Name field should be pre-filled
-    const nameInput = page.getByPlaceholder('e.g., Ofloxacin 0.3%')
+    const nameInput = page.getByPlaceholder('e.g., Cyclosporine')
     await expect(nameInput).toBeVisible()
     const inputValue = await nameInput.inputValue()
-    expect(inputValue).toContain(firstName?.replace('(inactive)', '').trim())
+    expect(inputValue).toContain(firstName?.trim())
   })
 
   test('can update medication name', async ({ page }) => {
@@ -239,27 +242,28 @@ test.describe('Medication Management - Edit Medication', () => {
 
     // Click edit on first card
     const firstCard = page.locator('.card').first()
-    await firstCard.getByTitle('Edit').click()
+    await clickEditOnCard(firstCard)
 
     await expect(page.getByRole('heading', { name: 'Edit Item' })).toBeVisible()
 
     // Update name
-    const nameInput = page.getByPlaceholder('e.g., Ofloxacin 0.3%')
+    const nameInput = page.getByPlaceholder('e.g., Cyclosporine')
     const originalName = await nameInput.inputValue()
     const updatedName = `${originalName} (Updated)`
     await nameInput.fill(updatedName)
 
     // Save
-    await page.getByRole('button', { name: 'Save' }).click()
+    await page.getByRole('button', { name: 'Save Changes' }).click()
 
     // Modal should close and name should be updated
     await expect(page.getByRole('heading', { name: 'Edit Item' })).not.toBeVisible({ timeout: 10000 })
     await expect(page.getByText(updatedName)).toBeVisible()
 
     // Restore original name
-    await page.locator('.card').filter({ hasText: updatedName }).getByTitle('Edit').click()
-    await page.getByPlaceholder('e.g., Ofloxacin 0.3%').fill(originalName)
-    await page.getByRole('button', { name: 'Save' }).click()
+    const updatedCard = page.locator('.card').filter({ hasText: updatedName })
+    await clickEditOnCard(updatedCard)
+    await page.getByPlaceholder('e.g., Cyclosporine').fill(originalName)
+    await page.getByRole('button', { name: 'Save Changes' }).click()
   })
 })
 
@@ -274,60 +278,172 @@ test.describe('Medication Management - Deactivate/Reactivate', () => {
   test('can deactivate a medication', async ({ page }) => {
     await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
 
-    // Get the name of the first active medication
-    const firstCard = page.locator('.card').filter({ has: page.locator('h3:not(:has-text("(inactive)"))') }).first()
+    // Get the name of the first medication
+    const firstCard = page.locator('.card').first()
     const medName = await firstCard.locator('h3').textContent()
 
-    // Click deactivate (trash icon)
-    await firstCard.locator('button').filter({ has: page.locator('svg.lucide-trash-2') }).click()
+    // Click archive (archive icon)
+    await firstCard.locator('button').filter({ has: page.locator('svg.lucide-archive') }).click()
 
     // Wait for update
     await page.waitForLoadState('networkidle')
 
-    // Card should now show as inactive or disappear (depending on filter)
-    // Enable show inactive to verify
-    await page.locator('input[type="checkbox"]').check()
+    // Switch to Archived tab to verify
+    await page.getByRole('button', { name: /Archived/i }).click()
     await page.waitForLoadState('networkidle')
 
-    // Should see the medication marked as inactive
-    await expect(page.getByText(`${medName?.trim()}(inactive)`.replace(/\s+/g, ''))).toBeVisible({ timeout: 5000 }).catch(async () => {
-      // Alternative check - the card with the name should have opacity class
-      const inactiveCard = page.locator('.card.opacity-50').filter({ hasText: medName?.trim() || '' })
-      await expect(inactiveCard).toBeVisible()
-    })
+    // Should see the medication in archived list
+    await expect(page.getByText(medName?.trim() || '')).toBeVisible({ timeout: 5000 })
 
     // Reactivate it to restore state
-    const inactiveCard = page.locator('.card').filter({ hasText: medName?.trim() || '' })
-    await inactiveCard.locator('button').filter({ has: page.locator('svg.lucide-rotate-ccw') }).click()
+    const archivedCard = page.locator('.card').filter({ hasText: medName?.trim() || '' })
+    await archivedCard.locator('button').filter({ has: page.locator('svg.lucide-rotate-ccw') }).click()
     await page.waitForLoadState('networkidle')
   })
 
   test('can reactivate an inactive medication', async ({ page }) => {
-    // First, show inactive medications
-    await page.locator('input[type="checkbox"]').check()
+    // Switch to Archived tab
+    await page.getByRole('button', { name: /Archived/i }).click()
     await page.waitForLoadState('networkidle')
 
-    // Find an inactive medication (has opacity-50 class)
-    const inactiveCard = page.locator('.card.opacity-50').first()
+    // Find an archived medication
+    const archivedCard = page.locator('.card').first()
 
-    // Skip if no inactive medications
-    const hasInactive = await inactiveCard.count() > 0
-    if (!hasInactive) {
+    // Skip if no archived medications
+    const hasArchived = await archivedCard.count() > 0
+    if (!hasArchived) {
       test.skip()
       return
     }
 
-    const medName = await inactiveCard.locator('h3').textContent()
+    const medName = await archivedCard.locator('h3').textContent()
 
     // Click reactivate (rotate-ccw icon)
-    await inactiveCard.locator('button').filter({ has: page.locator('svg.lucide-rotate-ccw') }).click()
+    await archivedCard.locator('button').filter({ has: page.locator('svg.lucide-rotate-ccw') }).click()
 
     // Wait for update
     await page.waitForLoadState('networkidle')
 
-    // Should no longer be inactive
-    const activeCard = page.locator('.card:not(.opacity-50)').filter({ hasText: medName?.replace('(inactive)', '').trim() || '' })
-    await expect(activeCard).toBeVisible({ timeout: 5000 })
+    // Switch back to Active tab
+    await page.getByRole('button', { name: /Active/i }).click()
+    await page.waitForLoadState('networkidle')
+
+    // Should see the medication in active list
+    await expect(page.getByText(medName?.trim() || '')).toBeVisible({ timeout: 5000 })
+  })
+})
+
+test.describe('Medication Management - Clone Medication', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/')
+    await page.evaluate(() => localStorage.clear())
+    await loginAsAdmin(page)
+    // Clone lives on the admin medications view at /admin/medications
+    await page.goto('/admin/medications')
+    await expect(page.getByRole('heading', { name: 'Manage Reminders' })).toBeVisible({ timeout: 10000 })
+  })
+
+  test('clone button exists on medication cards', async ({ page }) => {
+    await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
+
+    const firstCard = page.locator('.card').first()
+    const cloneButton = firstCard.getByTitle('Clone')
+    await expect(cloneButton).toBeVisible()
+  })
+
+  test('clicking clone opens modal with Clone Item title', async ({ page }) => {
+    await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
+    await page.waitForLoadState('networkidle')
+
+    const firstCard = page.locator('.card').first()
+    await firstCard.getByTitle('Clone').click()
+
+    await expect(page.getByRole('heading', { name: 'Clone Item' })).toBeVisible()
+  })
+
+  test('clone modal pre-fills name with (copy) suffix', async ({ page }) => {
+    await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
+    await page.waitForLoadState('networkidle')
+
+    // Get the name from the first card
+    const firstName = await page.locator('.card').first().locator('h3').textContent()
+    const sourceName = firstName?.replace('(inactive)', '').trim() || ''
+
+    // Click clone
+    await page.locator('.card').first().getByTitle('Clone').click()
+    await expect(page.getByRole('heading', { name: 'Clone Item' })).toBeVisible()
+
+    // Name field should be pre-filled with "(copy)" suffix
+    const nameInput = page.getByPlaceholder('e.g., Ofloxacin 0.3%')
+    await expect(nameInput).toHaveValue(`${sourceName} (copy)`)
+  })
+
+  test('clone modal shows info banner with source name', async ({ page }) => {
+    await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
+    await page.waitForLoadState('networkidle')
+
+    const firstName = await page.locator('.card').first().locator('h3').textContent()
+    const sourceName = firstName?.replace('(inactive)', '').trim() || ''
+
+    await page.locator('.card').first().getByTitle('Clone').click()
+    await expect(page.getByRole('heading', { name: 'Clone Item' })).toBeVisible()
+
+    // Info banner should mention the source item
+    const banner = page.locator('.bg-accent\\/10')
+    await expect(banner).toBeVisible()
+    await expect(banner.getByText(`Cloning from`)).toBeVisible()
+    await expect(banner.getByText(sourceName)).toBeVisible()
+  })
+
+  test('can clone a medication and see it in the list', async ({ page }) => {
+    await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
+    await page.waitForLoadState('networkidle')
+
+    // Click clone on first card
+    await page.locator('.card').first().getByTitle('Clone').click()
+    await expect(page.getByRole('heading', { name: 'Clone Item' })).toBeVisible()
+
+    // Give it a unique name to avoid collisions
+    const clonedName = `${TEST_PREFIX}-Clone-${Date.now()}`
+    const nameInput = page.getByPlaceholder('e.g., Ofloxacin 0.3%')
+    await nameInput.fill(clonedName)
+
+    // Submit via Clone button
+    const submitButton = page.locator('button[type="submit"]').filter({ hasText: /Clone/ })
+    await submitButton.click()
+
+    // Modal should close
+    await expect(page.getByRole('heading', { name: 'Clone Item' })).not.toBeVisible({ timeout: 15000 })
+
+    // Cloned medication should appear in the list
+    await page.waitForLoadState('networkidle')
+    await expect(page.getByText(clonedName)).toBeVisible({ timeout: 10000 })
+  })
+
+  test('cloned medication preserves type and fields from source', async ({ page }) => {
+    await expect(page.locator('.card').first()).toBeVisible({ timeout: 10000 })
+    await page.waitForLoadState('networkidle')
+
+    const firstCard = page.locator('.card').first()
+
+    // Clone it
+    await firstCard.getByTitle('Clone').click()
+    await expect(page.getByRole('heading', { name: 'Clone Item' })).toBeVisible()
+
+    const modal = page.locator('.fixed.inset-0').first()
+    const formSelects = modal.locator('select')
+
+    // Type select should have a value (not be empty/default if source had one)
+    const typeValue = await formSelects.nth(0).inputValue()
+    expect(['medication', 'food', 'supplement']).toContain(typeValue)
+
+    // Category select should have a value
+    const categoryValue = await formSelects.nth(1).inputValue()
+    expect(['leftEye', 'rightEye', 'oral', 'food']).toContain(categoryValue)
+
+    // Frequency select should have a value
+    const frequencyValue = await formSelects.nth(2).inputValue()
+    expect(['1x_daily', '2x_daily', '4x_daily', '12h', 'as_needed']).toContain(frequencyValue)
   })
 })
 

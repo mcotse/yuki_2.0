@@ -7,12 +7,10 @@ import { logger, type Logger } from '../lib/logger.js'
 const require = createRequire(import.meta.url)
 const pinoHttp = require('pino-http') as (opts: Options) => HttpLogger
 
-declare global {
-  namespace Express {
-    interface Request {
-      log: Logger
-      id: string
-    }
+declare module 'express-serve-static-core' {
+  interface Request {
+    log: Logger
+    id: string
   }
 }
 

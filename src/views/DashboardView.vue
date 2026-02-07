@@ -166,6 +166,10 @@ function undoMedication(instanceId: string) {
   instancesStore.undoConfirmation(instanceId)
 }
 
+function deleteMedication(instanceId: string) {
+  instancesStore.deleteInstance(instanceId)
+}
+
 onMounted(loadDashboard)
 </script>
 
@@ -272,6 +276,7 @@ onMounted(loadDashboard)
                   status="overdue"
                   @confirm="confirmMedication(instance.id, $event)"
                   @snooze="instancesStore.snoozeInstance(instance.id, $event)"
+                  @delete="deleteMedication(instance.id)"
                 />
               </TransitionGroup>
             </div>
@@ -294,6 +299,7 @@ onMounted(loadDashboard)
               status="due"
               @confirm="confirmMedication(instance.id, $event)"
               @snooze="instancesStore.snoozeInstance(instance.id, $event)"
+              @delete="deleteMedication(instance.id)"
             />
           </TransitionGroup>
         </div>
@@ -313,6 +319,7 @@ onMounted(loadDashboard)
               :instance="instance"
               status="snoozed"
               @confirm="confirmMedication(instance.id, $event)"
+              @delete="deleteMedication(instance.id)"
             />
           </TransitionGroup>
         </div>
@@ -342,6 +349,7 @@ onMounted(loadDashboard)
                   :key="instance.id"
                   :instance="instance"
                   status="upcoming"
+                  @delete="deleteMedication(instance.id)"
                 />
               </TransitionGroup>
               <!-- Show More / Show Less Button -->
@@ -456,6 +464,7 @@ onMounted(loadDashboard)
                   :instance="instance"
                   status="confirmed"
                   @undo="undoMedication(instance.id)"
+                  @delete="deleteMedication(instance.id)"
                 />
               </TransitionGroup>
             </div>

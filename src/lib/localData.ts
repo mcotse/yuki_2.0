@@ -381,6 +381,16 @@ export const localData = {
     return newInstance
   },
 
+  deleteInstance(date: string, id: string): boolean {
+    const instances = this.getInstancesForDate(date)
+    const index = instances.findIndex(i => i.id === id)
+    if (index === -1) return false
+
+    instances.splice(index, 1)
+    this.saveInstancesForDate(date, instances)
+    return true
+  },
+
   // Get confirmed instances for history
   getConfirmedInstancesForDate(date: string): DailyInstance[] {
     return this.getInstancesForDate(date).filter(i => i.status === 'confirmed')

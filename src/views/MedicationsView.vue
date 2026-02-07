@@ -17,6 +17,7 @@ import {
   X,
   ChevronDown,
   ChevronUp,
+  Copy,
 } from 'lucide-vue-next'
 
 // ItemInput is the type for creating new items
@@ -29,6 +30,9 @@ const { canManageMedications } = useAuth()
 const showArchived = ref(false)
 const showModal = ref(false)
 const editingItem = ref<ItemWithSchedules | null>(null)
+const isCloning = ref(false)
+const cloneSourceName = ref('')
+const cloneSchedules = ref<Array<{ time_slot: string; scheduled_time: string }>>([])
 const isSaving = ref(false)
 const expandedItems = ref<Set<string>>(new Set())
 
@@ -143,9 +147,36 @@ function openEditModal(item: ItemWithSchedules) {
   showModal.value = true
 }
 
+function openCloneModal(item: ItemWithSchedules) {
+  editingItem.value = null
+  isCloning.value = true
+  cloneSourceName.value = item.name
+  formData.value = {
+    name: `${item.name} (copy)`,
+    type: item.type,
+    category: (item.category as ItemCategory) ?? 'oral',
+    location: item.location,
+    dose: item.dose ?? '',
+    frequency: (item.frequency as ItemFrequency) ?? '1x_daily',
+    notes: item.notes ?? '',
+    conflict_group: item.conflict_group ?? '',
+    schedules: item.schedules.length > 0
+      ? item.schedules.map(s => ({ time_slot: s.time_slot, scheduled_time: s.scheduled_time.substring(0, 5) }))
+      : [{ time_slot: 'morning', scheduled_time: '08:00' }],
+  }
+  cloneSchedules.value = (item.schedules || []).map(s => ({
+    time_slot: s.time_slot,
+    scheduled_time: s.scheduled_time,
+  }))
+  showModal.value = true
+}
+
 function closeModal() {
   showModal.value = false
   editingItem.value = null
+  isCloning.value = false
+  cloneSchedules.value = []
+  cloneSourceName.value = ''
 }
 
 function updateLocationFromCategory() {
@@ -298,6 +329,13 @@ onMounted(async () => {
               <div class="flex items-center gap-1">
                 <button
                   class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                  title="Clone"
+                  @click="openCloneModal(item)"
+                >
+                  <Copy class="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button
+                  class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
                   @click="openEditModal(item)"
                 >
                   <Edit2 class="w-4 h-4 text-muted-foreground" />
@@ -373,6 +411,13 @@ onMounted(async () => {
               <div class="flex items-center gap-1">
                 <button
                   class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                  title="Clone"
+                  @click="openCloneModal(item)"
+                >
+                  <Copy class="w-4 h-4 text-muted-foreground" />
+                </button>
+                <button
+                  class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
                   @click="openEditModal(item)"
                 >
                   <Edit2 class="w-4 h-4 text-muted-foreground" />
@@ -415,6 +460,13 @@ onMounted(async () => {
                 </p>
               </div>
               <div class="flex items-center gap-1">
+                <button
+                  class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                  title="Clone"
+                  @click="openCloneModal(item)"
+                >
+                  <Copy class="w-4 h-4 text-muted-foreground" />
+                </button>
                 <button
                   class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
                   @click="openEditModal(item)"
@@ -469,7 +521,7 @@ onMounted(async () => {
         <div class="bg-card rounded-t-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-xl">
           <div class="flex items-center justify-between mb-6">
             <h2 class="text-xl font-bold text-foreground">
-              {{ editingItem ? 'Edit Item' : 'Add Item' }}
+              {{ editingItem ? 'Edit Item' : isCloning ? 'Clone Item' : 'Add Item' }}
             </h2>
             <button
               class="p-2 rounded-lg hover:bg-muted/50 transition-colors"
@@ -477,6 +529,14 @@ onMounted(async () => {
             >
               <X class="w-5 h-5 text-muted-foreground" />
             </button>
+          </div>
+
+          <div
+            v-if="isCloning"
+            class="flex items-center gap-2 px-3 py-2 mb-4 rounded-xl bg-accent/10 text-sm text-accent"
+          >
+            <Copy class="w-4 h-4 flex-shrink-0" />
+            <span>Cloning from <strong>{{ cloneSourceName }}</strong> — edit any fields below, then save.</span>
           </div>
 
           <form @submit.prevent="saveItem" class="space-y-4">
@@ -635,7 +695,7 @@ onMounted(async () => {
                 :disabled="isSaving || !formData.name.trim()"
               >
                 <RefreshCw v-if="isSaving" class="w-5 h-5 animate-spin mx-auto" />
-                <span v-else>{{ editingItem ? 'Save Changes' : 'Add Item' }}</span>
+                <span v-else>{{ editingItem ? 'Save Changes' : isCloning ? 'Clone' : 'Add Item' }}</span>
               </button>
             </div>
           </form>
